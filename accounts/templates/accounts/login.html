@@ -1,0 +1,17 @@
+{% extends 'accounts/base.html' %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<p class="eyebrow">WELCOME BACK</p>
+<h1 id="page-title">Sign in to your account</h1>
+<p class="intro">Enter your email and password to continue.</p>
+<form id="auth-form">
+  {% csrf_token %}
+  <label for="email">Email address</label>
+  <input id="email" name="email" type="email" autocomplete="username" maxlength="254" required>
+  <label for="password">Password</label>
+  <input id="password" name="password" type="password" autocomplete="current-password" maxlength="1024" required>
+  <a class="form-link" href="{% url 'password-reset-page' %}">Forgot your password?</a>
+  <button type="submit">Sign in</button>
+</form>
+<p class="footnote">New here? <a href="{% url 'signup-page' %}">Create an account</a></p>
+{% endblock %}
