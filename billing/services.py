@@ -128,16 +128,19 @@ def generate_invoice_for_subscription(
             # append attempt offset if racing
             number = f"{number[:-4]}{(int(number[-4:]) + attempt):04d}"
         try:
-            invoice = Invoice.objects.create(
-                invoice_number=number,
-                subscription=sub,
-                customer=sub.customer,
-                issue_date=billing_date,
-                due_date=due_date,
-                period_start=period_start,
-                period_end=period_end,
-                status=Invoice.Status.DRAFT,
-            )
+            # A failed unique invoice-number insert must roll back to a
+            # savepoint before the next candidate can be tried on PostgreSQL.
+            with transaction.atomic():
+                invoice = Invoice.objects.create(
+                    invoice_number=number,
+                    subscription=sub,
+                    customer=sub.customer,
+                    issue_date=billing_date,
+                    due_date=due_date,
+                    period_start=period_start,
+                    period_end=period_end,
+                    status=Invoice.Status.DRAFT,
+                )
             break
         except IntegrityError:
             continue
@@ -320,6 +323,10 @@ def apply_discount_to_invoice(invoice: Invoice) -> None:
         return
 
     lines = list(invoice.lines.all())
+    if not disc.is_valid_on(invoice.issue_date):
+        return
+    if _calculate_discount_saving(disc, lines) <= Decimal("0.00"):
+        return
 
     if disc.applies_to == Discount.Scope.SUBSCRIPTION:
         subtotal = sum((l.quantity * l.unit_price for l in lines), Decimal("0.00"))

@@ -13,7 +13,8 @@ from decimal import Decimal
 import datetime
 
 from django.conf import settings
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -362,6 +363,33 @@ class Payment(models.Model):
 
     class Meta:
         ordering = ["-payment_date", "-created_at"]
+
+    def clean(self):
+        super().clean()
+        if self.amount is not None and self.amount <= Decimal("0.00"):
+            raise ValidationError({"amount": "Payment amount must be greater than zero."})
+        if not self.invoice_id:
+            return
+        invoice = self.invoice
+        if invoice.status in (Invoice.Status.CANCELLED, Invoice.Status.DRAFT):
+            raise ValidationError({"invoice": "Payments require a confirmed, non-cancelled invoice."})
+        if self.amount is not None:
+            remaining = invoice.total - invoice.amount_paid
+            if self.pk:
+                remaining += type(self).objects.filter(pk=self.pk).values_list("amount", flat=True).first() or Decimal("0.00")
+            if self.amount > remaining:
+                raise ValidationError({"amount": "Payment exceeds the invoice's remaining balance."})
+
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            if self.pk:
+                old_invoice_id = type(self).objects.filter(pk=self.pk).values_list("invoice_id", flat=True).first()
+                if old_invoice_id and old_invoice_id != self.invoice_id:
+                    raise ValidationError({"invoice": "A payment cannot be moved to another invoice."})
+            if self.invoice_id:
+                self.invoice = Invoice.objects.select_for_update().get(pk=self.invoice_id)
+            self.full_clean()
+            return super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Payment {self.amount} ({self.payment_method}) -> {self.invoice.invoice_number}"

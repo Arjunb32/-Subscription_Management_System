@@ -4,6 +4,7 @@ Tests for billing services and domain logic.
 
 import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -109,6 +110,53 @@ class BillingServicesTests(TestCase):
         inv2 = generate_invoice_for_subscription(self.sub.id, billing_date=datetime.date(2026, 2, 1))
         self.assertIsNone(inv2)
         self.assertEqual(Invoice.objects.filter(subscription=self.sub).count(), 1)
+
+    def test_invoice_number_collision_retries_after_database_savepoint(self):
+        existing = Invoice.objects.create(
+            subscription=self.sub,
+            customer=self.customer,
+            issue_date=datetime.date(2026, 2, 1),
+            due_date=datetime.date(2026, 2, 16),
+            period_start=datetime.date(2026, 2, 1),
+            period_end=datetime.date(2026, 3, 1),
+            invoice_number="INV-202602-0001",
+        )
+        with patch.object(Invoice, "_generate_invoice_number", return_value=existing.invoice_number):
+            invoice = generate_invoice_for_subscription(
+                self.sub.id, billing_date=datetime.date(2026, 2, 1)
+            )
+        self.assertIsNotNone(invoice)
+        self.assertEqual(invoice.invoice_number, "INV-202602-0002")
+
+    def test_discount_usage_change_is_rechecked_after_lock(self):
+        discount = Discount.objects.create(
+            name="Expired before lock",
+            discount_type=Discount.Type.PERCENTAGE,
+            value=Decimal("10.00"),
+            start_date=datetime.date(2026, 3, 1),
+            max_uses=1,
+            applies_to=Discount.Scope.SUBSCRIPTION,
+        )
+        invoice = Invoice.objects.create(
+            subscription=self.sub,
+            customer=self.customer,
+            issue_date=datetime.date(2026, 2, 1),
+            due_date=datetime.date(2026, 2, 16),
+            period_start=datetime.date(2026, 1, 1),
+            period_end=datetime.date(2026, 2, 1),
+        )
+        from billing.services import apply_discount_to_invoice
+
+        # A stale candidate can only be returned by a changed concurrent state;
+        # the locked row's validity is checked again before consumption.
+        with patch("billing.services._find_best_discount", return_value=discount), patch(
+            "billing.services._calculate_discount_saving", return_value=Decimal("10.00")
+        ):
+            apply_discount_to_invoice(invoice)
+        discount.refresh_from_db()
+        self.assertEqual(discount.times_used, 0)
+        invoice.refresh_from_db()
+        self.assertIsNone(invoice.discount_id)
 
     def test_subscription_lifecycle_respect(self):
         # Paused subscription cannot be billed
@@ -247,6 +295,41 @@ class BillingServicesTests(TestCase):
         self.assertEqual(inv.amount_paid, Decimal("236.00"))
         self.assertEqual(inv.amount_due, Decimal("0.00"))
         self.assertEqual(inv.status, Invoice.Status.PAID)
+
+    def test_payment_model_save_and_delete_reconcile_invoice(self):
+        invoice = generate_invoice_for_subscription(
+            self.sub.id, billing_date=datetime.date(2026, 2, 1)
+        )
+        invoice.status = Invoice.Status.CONFIRMED
+        invoice.save(update_fields=["status"])
+        payment = Payment.objects.create(
+            invoice=invoice,
+            amount=invoice.total,
+            payment_method=Payment.Method.CASH,
+            payment_date=datetime.date(2026, 2, 2),
+        )
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.amount_paid, invoice.total)
+        self.assertEqual(invoice.status, Invoice.Status.PAID)
+
+        payment.delete()
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.amount_paid, Decimal("0.00"))
+        self.assertEqual(invoice.status, Invoice.Status.CONFIRMED)
+
+    def test_direct_payment_save_rejects_overpayment(self):
+        invoice = generate_invoice_for_subscription(
+            self.sub.id, billing_date=datetime.date(2026, 2, 1)
+        )
+        invoice.status = Invoice.Status.CONFIRMED
+        invoice.save(update_fields=["status"])
+        with self.assertRaises(ValidationError):
+            Payment.objects.create(
+                invoice=invoice,
+                amount=invoice.total + Decimal("0.01"),
+                payment_method=Payment.Method.CASH,
+                payment_date=datetime.date(2026, 2, 2),
+            )
 
     def test_cancellation_safety_with_payments(self):
         inv = generate_invoice_for_subscription(self.sub.id, billing_date=datetime.date(2026, 2, 1))

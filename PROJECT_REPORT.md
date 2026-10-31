@@ -1,187 +1,94 @@
-# Billing, Invoices & Payments Subsystem — Implementation & Verification Report
+# Billing implementation and verification report
 
-**Author:** Adwaith  
-**Subsystem:** Billing, Invoices, Discounts & Payments (`billing` app)  
-**Project:** Subscription Management System (Brightloop Software Case Study)  
-**Branch:** `feat/billing`  
-**Target:** `main`  
-**Date:** October 31, 2026  
-**Status:** **DRAFT PR / Ready for Review** (Pending upstream merge of `feat/auth-roles` and delivery of Haridev's `subscriptions`/`products` models)
+**Owner:** Adwaith
+**Branch:** feat/billing
+**Target:** main
+**Status:** Draft integration; production model dependencies and migration are missing
+**Updated:** 31 October 2026
 
----
+## Current integration state
 
-## 1. Executive Summary & Status
+The branch has been updated with the fetched origin/main, which contains Arjun's
+merged authentication foundation. Billing references the shared
+settings.AUTH_USER_MODEL, user.role and existing session/CSRF authentication.
+Customer invoice and payment lists use the documented customer-scoping mixin;
+application roles remain independent of Django admin flags.
 
-This document provides a verified, evidence-backed report on the billing subsystem implementation for the shared Subscription Management System.
+The repository does not contain production products or subscriptions apps.
+Only test fixture models exist under billing/tests/fixtures. Billing is absent
+from default INSTALLED_APPS; the billing URL is conditional so the default shared
+foundation can start without importing uninstalled billing models. Under
+config.test_settings, the fixture apps and billing are enabled for API tests.
+No production billing migration has been created. Generating a migration or
+claiming end-to-end integration before Haridev's actual models land would invent
+a schema contract.
 
-All core billing requirements—automated recurring invoice generation, dynamic tax/discount calculations, concurrency-safe row locking, idempotency guards, payment reconciliation state machine, customer portal endpoints, and finance dashboard metrics—have been fully implemented and verified against an isolated PostgreSQL 18 instance.
+Billing currently accesses Subscription.customer, plan.billing_interval,
+status, current_period_start/current_period_end, expiry_date,
+payment_terms_days, and the reverse lines relation. Each line must provide
+product, optional product_variant, quantity, unit_price and optional tax_rule.
+TaxRule ownership is expected to be subscriptions/catalog based on the draft
+contract; Haridev must confirm ownership and fields. See
+docs/BILLING_INTEGRATION.md for every model dependency and exact integration
+steps.
 
-### Integration Status & Upstream Dependencies
-- **Arjun (`feat/auth-roles`):** Shared Django/DRF foundation, custom `accounts.User` model, role-based access control (`admin`, `staff`, `customer`), session/CSRF authentication, and customer scoping mixins. Our branch has cleanly integrated these helpers.
-- **Haridev (`products` & `subscriptions`):** Product catalog, variants, plans, and subscription lifecycle models. These models **have not yet been pushed to the shared repository**. Our subsystem connects to these models via string references and dynamic runtime resolution (`apps.get_model()`). For verification, test fixtures matching the agreed field contract were used.
-- **Sreehari (Reporting & Dashboard Frontend):** The backend financial summary endpoint (`/api/billing/dashboard/summary/`) is fully implemented, verified, and documented for direct consumption by the frontend portal.
+## Checks actually run in this review
 
----
+- Fetched origin and merged origin/main into feat/billing.
+- Isolated PostgreSQL, using config.test_settings and the dedicated test cluster.
+- Initial focused billing run before review fixes: 19 passed.
+- After fixes: 29 billing tests passed on the isolated PostgreSQL database,
+  including three threaded concurrency cases (duplicate invoice generation,
+  final discount use, and competing payments), payment save/delete
+  reconciliation, discount revalidation and invoice-number collision retry.
+- Full isolated PostgreSQL suite: 81 tests passed, including the 52 shared
+  accounts/auth regression tests.
+- Default manage.py check: passed after making the billing URL mount
+  conditional on billing being installed.
+- Test-settings makemigrations --check --dry-run: no changes detected. Billing
+  has no real migrations yet, so this is not evidence of production migration
+  drift being checked.
+- git diff --check was run; only local newline-only edits in six fixture files
+  remain outside the feature changes and are intentionally unstaged.
+- No production migration drift check or subscription-to-dashboard integration
+  against real models is possible until those models and migration files exist.
+- The working database was not migrated, reset or otherwise modified.
 
-## 2. Verified Test Execution & Evidence
+## Implemented billing behavior and limits
 
-Testing was executed against an isolated PostgreSQL 18 instance running locally on port 7130 (`test_subscription_management`). The working database and production ports were untouched.
+The code includes period-idempotent invoice generation, calendar interval
+arithmetic, catch-up for up to 36 periods per invocation, subscription status
+checks, invoice line price/tax snapshots, discount date/eligibility/usage checks,
+partial payments, overpayment rejection, invoice cancellation guards and a
+staff finance summary. Database row locks protect subscription generation,
+discount usage and payment recording. Invoice numbers have a unique constraint;
+the retry path now uses savepoints so a number collision does not poison the
+transaction.
 
-### Test Results
+These behaviors have fixture-based tests. Passing tests against fixtures do not
+prove compatibility with Haridev's production models. The dashboard is global
+for staff/admin, executes multiple queries, and has no measured latency. Its
+billed revenue, collected payments and outstanding balance are distinct; canceled
+invoices are excluded where appropriate.
 
-```
-Ran 71 tests in 10.077s
-OK
-System check identified no issues (0 silenced).
-```
+The generate_invoices management command exists, but no scheduler is configured.
+PDF/print output, invoice sending, SMTP delivery for invoices, refunds/voids and
+customer billing UI are not implemented. Cancellation is rejected after money
+has been recorded; refund/void handling needs a separately agreed payment
+lifecycle.
 
-### Breakdown of Executed Test Suites:
-1. **Accounts & Authentication Regression Suite (52 tests - Arjun):**
-   - User creation, password validation, role enforcement, attempt rate-limiting, session handling, CSRF protection, and reset tokens.
-   - Result: **52/52 passed** (0 regressions introduced).
+## Remaining integration steps
 
-2. **Billing Domain & Model Suite (19 tests - Adwaith):**
-   - `test_discount_validity_rules`: Verifies start/end validity dates, active flags, and max usage ceilings.
-   - `test_invoice_number_generation_and_uniqueness`: Verifies sequential `INV-YYYYMM-XXXX` assignment under concurrency.
-   - `test_period_idempotency_constraint`: Database-level composite `UniqueConstraint(subscription, period_start, period_end)` prevents duplicate billing.
-   - `test_invoice_line_calculate`: Exact financial calculations with 18% tax and discount deductions.
-   - `test_invoice_amount_due_and_overdue_flags`: Proper calculation of remaining balance and overdue status based on due dates.
-   - `test_calendar_boundary_calculations`: Month-end clamping (Jan 31 $\rightarrow$ Feb 28), leap year calculations (Jan 31 2028 $\rightarrow$ Feb 29 2028, Feb 29 2028 $\rightarrow$ Feb 28 2029), weekly, and daily intervals using pure Python without external dependencies.
-   - `test_generate_invoice_for_active_subscription`: Full invoice generation cycle, snapshotting prices and advancing subscription periods.
-   - `test_idempotency_prevents_duplicate_billing`: Verifies retry and re-run calls return `None` and do not generate duplicate invoices.
-   - `test_subscription_lifecycle_respect`: Paused, closed, and expired subscriptions are skipped and not billed. Reaching `expiry_date` transitions status to `closed`.
-   - `test_multi_period_catch_up`: Multi-period catch-up generation accurately generates all missed periods sequentially when the system was offline or missed billing runs.
-   - `test_price_and_tax_preservation_after_catalog_changes`: Altering catalog `Product.sales_price` or `TaxRule.rate` after issuance leaves historical invoice lines unchanged.
-   - `test_discount_engine_and_usage_limit`: Verifies greedy highest-saving discount selection and strict enforcement of `max_uses`.
-   - `test_payment_recording_partial_and_full_reconciliation`: Rejects non-positive amounts, rejects payments on draft/cancelled invoices, rejects overpayments exceeding balance, handles partial payments, and transitions status to `paid` upon settlement.
-   - `test_cancellation_safety_with_payments`: Strictly prohibits cancelling invoices where money has already been received.
-   - `test_anonymous_requests_rejected`: Unauthenticated requests to protected billing routes receive HTTP 403 under `SessionAuthentication`.
-   - `test_customer_isolation_on_customer_portal`: Customer A can only query Customer A's invoices/payments via `/my/invoices/` and cannot inspect Customer B's records.
-   - `test_staff_can_view_all_invoices`: Staff users have read access across all company invoices.
-   - `test_admin_only_discount_mutations`: Staff cannot create or mutate discount rules (HTTP 403); only Application Admins can create discounts (HTTP 201).
-   - `test_dashboard_summary_metrics`: Verifies accurate calculation of `billed_revenue`, `payments_collected`, `total_outstanding`, and `overdue_invoices`, with explicit exclusion of cancelled invoices.
-
----
-
-## 3. Business Logic & Correctness Guarantees
-
-### 3.1 Concurrency & Idempotency
-- **Invoice Generation:** Wrapped in `@transaction.atomic` using `select_for_update()` on the `Subscription` record. If two billing jobs run simultaneously, only one obtains the lock; the second detects the updated period or existing invoice and returns `None`.
-- **Database Unique Constraint:** `models.UniqueConstraint(fields=["subscription", "period_start", "period_end"])` enforces period idempotency at the database engine level.
-- **Discount Usage Locks:** `select_for_update()` is acquired on `Discount` during application to guarantee that concurrent invoice generation cannot over-allocate a discount with a limited `max_uses`.
-- **Rounding Drift Prevention:** When product-scoped discounts are distributed across lines, fractional rounding remains strictly balanced by allocating residual cents to the final line.
-
-### 3.2 Payments & Reconciliation
-- **Overpayment Guard:** `record_payment` locks the parent invoice, computes `remaining_due = total - amount_paid`, and rejects amounts greater than `remaining_due`.
-- **Invalid State Guards:** Payments on `draft` or `cancelled` invoices are rejected with descriptive validation errors.
-- **Cancellation Safety:** Invoices with `amount_paid > 0` cannot be cancelled. Any attempt raises a validation error requiring voiding or refunding payments first.
-- **Automatic State Machine:** When `amount_paid >= total`, status transitions to `paid`. If a payment record is voided or deleted, `post_delete` signals automatically revert status to `confirmed`.
-
-### 3.3 Zero External Package Additions
-- To avoid dependency conflicts with the verified shared environment, interval arithmetic is implemented using standard Python `calendar` and `datetime.timedelta`.
-- Queryset filtering is implemented directly inside DRF generic views, removing any requirement for `django-filter` or `python-dateutil`.
-
----
-
-## 4. API Endpoints Reference for Teammates
-
-All routes are mounted at `/api/billing/` (configured in [`config/urls.py`](file:///c:/Users/adduu/OneDrive/Desktop/susbscrption%20management%20system/-Subscription_Management_System/config/urls.py)).
-
-| Method | Path | Allowed Roles | Purpose |
-|---|---|---|---|
-| `GET` | `/api/billing/invoices/` | Staff, Admin | List/filter all invoices (`status`, `customer`, `issue_date_from`, `due_date_to`, `overdue`). |
-| `POST` | `/api/billing/invoices/` | Staff, Admin | Manually draft an invoice header. |
-| `POST` | `/api/billing/invoices/generate/` | Staff, Admin | Trigger batch billing run. Payload: `{"billing_date": "YYYY-MM-DD"}` (optional). |
-| `GET` | `/api/billing/invoices/{id}/` | Staff, Admin, Owner | Detailed invoice view with itemized lines. |
-| `POST` | `/api/billing/invoices/{id}/confirm/` | Staff, Admin | Transition invoice from `draft` to `confirmed`. |
-| `POST` | `/api/billing/invoices/{id}/cancel/` | Staff, Admin | Cancel invoice (blocked if payments exist). |
-| `GET` | `/api/billing/payments/` | Staff, Admin | List/filter payments (`invoice`, `payment_method`, `date_from`, `date_to`). |
-| `POST` | `/api/billing/payments/` | Staff, Admin | Record payment with audit tracking (`recorded_by`). |
-| `GET` | `/api/billing/payments/{id}/` | Staff, Admin | View payment details. |
-| `GET` | `/api/billing/discounts/` | Staff, Admin | List discount rules. |
-| `POST` | `/api/billing/discounts/` | **Admin Only** | Create discount rule (`value`, `min_purchase`, `max_uses`, `applies_to`). |
-| `GET/PUT/DELETE`| `/api/billing/discounts/{id}/`| **Admin Only** (writes) | Manage specific discount rule. |
-| `GET` | `/api/billing/dashboard/summary/` | Staff, Admin | Single-query financial KPIs (see schema below). |
-| `GET` | `/api/billing/my/invoices/` | Customer (Self) | Customer portal: invoices scoped to `request.user`. |
-| `GET` | `/api/billing/my/payments/` | Customer (Self) | Customer portal: payments scoped to customer's invoices. |
-
-### Dashboard Summary Schema (For Sreehari)
-```json
-{
-  "active_subscriptions": 142,
-  "billed_revenue": "28500.00",
-  "payments_collected": "24100.00",
-  "total_outstanding": "4400.00",
-  "overdue_invoices": 3,
-  "invoices_by_status": {
-    "draft": 4,
-    "confirmed": 12,
-    "paid": 126,
-    "cancelled": 2
-  },
-  "revenue_this_month": "6800.00",
-  "payments_this_month": "5900.00"
-}
-```
-
----
-
-## 5. Model Dependency Contract (For Haridev)
-
-The `billing` module expects Haridev's models to satisfy the following field contracts:
-
-1. **`subscriptions.Subscription`**:
-   - `customer`: `ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)`
-   - `plan`: `ForeignKey("subscriptions.Plan", on_delete=models.PROTECT)`
-   - `status`: `CharField` with choices including `'draft'`, `'quotation'`, `'confirmed'`, `'active'`, `'paused'`, `'closed'`
-   - `start_date`: `DateField`
-   - `current_period_start`: `DateField`
-   - `current_period_end`: `DateField`
-   - `expiry_date`: `DateField(null=True, blank=True)`
-   - `payment_terms_days`: `PositiveIntegerField(default=30)`
-   - `lines`: Reverse relation for `SubscriptionLine`
-
-2. **`subscriptions.SubscriptionLine`**:
-   - `subscription`: `ForeignKey(Subscription, related_name='lines')`
-   - `product`: `ForeignKey("products.Product", on_delete=models.PROTECT)`
-   - `product_variant`: `ForeignKey("products.ProductVariant", null=True, blank=True)`
-   - `quantity`: `DecimalField`
-   - `unit_price`: `DecimalField`
-   - `tax_rule`: `ForeignKey("subscriptions.TaxRule", null=True, blank=True)`
-
-3. **`subscriptions.TaxRule`**:
-   - `name`: `CharField`
-   - `rate`: `DecimalField(max_digits=5, decimal_places=2)` (e.g. `18.00` = 18%)
-   - `is_active`: `BooleanField(default=True)`
-
-4. **`subscriptions.Plan`**:
-   - `billing_interval`: `CharField` with choices `'daily'`, `'weekly'`, `'monthly'`, `'yearly'`
-
-5. **`products.Product` & `ProductVariant`**:
-   - Standard Django models with string representations.
-
----
-
-## 6. Honest Audit of Remaining Work & Non-Goals
-
-1. **Invoice PDF / Print Rendering & Email Delivery:**
-   - The backend provides complete JSON line item details and state endpoints for printing/confirmation.
-   - Generating binary PDF files (e.g., using Weasyprint or ReportLab) and triggering SMTP email dispatch to customers on billing day are frontend/task integrations that remain to be connected once email/SMTP configuration is active.
-
-2. **Cron / Job Scheduler Daemon:**
-   - The CLI command `python manage.py generate_invoices [--date YYYY-MM-DD]` is implemented and verified.
-   - Setting up a background cron job (or Celery beat / Windows Task Scheduler) to invoke this daily at midnight is an infrastructure deployment step, not a code change.
-
-3. **Production Migrations:**
-   - Production migrations for `billing` should be generated (`python manage.py makemigrations billing`) once Haridev's actual models are present in the shared repository, ensuring foreign key dependencies are committed with accurate migration references.
-
----
-
-## 7. Next Steps for Integration
-
-1. **For Arjun:** Review and merge PR #1 (`feat/auth-roles`) into `main`.
-2. **For Haridev:** Commit and push the `products` and `subscriptions` models following the contract outlined in Section 5.
-3. **For Adwaith:**
-   - Rebase `feat/billing` onto `main` following upstream merges.
-   - Run `python manage.py makemigrations billing` to create the final production migration.
-   - Remove Draft status from the billing PR and merge into `main`.
+1. Haridev supplies and pushes the real products/subscriptions models and
+   migrations, and confirms the contract including TaxRule ownership, lifecycle
+   values, expiry behavior and variant/tax pricing.
+2. Add products, subscriptions and billing to INSTALLED_APPS together, and
+   verify the mounted URLs against the actual app registry.
+3. Generate billing migrations with dependencies on the real model migrations
+   and accounts.User migration. Inspect migration operations and each existing
+   database's state before applying; do not reset a working database.
+4. Run billing tests plus the shared authentication regression suite against
+   isolated PostgreSQL, check migration drift, and test subscription → invoice
+   → payment → dashboard with the real models.
+5. Keep this PR draft until those integration checks pass; then review and merge
+   through main.

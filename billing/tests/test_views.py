@@ -110,6 +110,47 @@ class BillingApiTests(TestCase):
         detail_resp = self.client.get(f"/api/billing/invoices/{self.inv_b.id}/")
         self.assertIn(detail_resp.status_code, (403, 404))
 
+    def test_customer_cannot_write_using_another_customers_related_ids(self):
+        self.client.force_authenticate(user=self.cust_a)
+        payment_resp = self.client.post(
+            "/api/billing/payments/",
+            data={"invoice": self.inv_b.id, "amount": "10.00", "payment_method": "cash", "payment_date": "2026-02-05"},
+            format="json",
+        )
+        invoice_resp = self.client.post(
+            "/api/billing/invoices/",
+            data={"subscription": self.sub_b.id, "customer": self.cust_b.id,
+                  "issue_date": "2026-02-01", "due_date": "2026-02-15",
+                  "period_start": "2026-01-01", "period_end": "2026-02-01"},
+            format="json",
+        )
+        self.assertEqual(payment_resp.status_code, 403)
+        self.assertEqual(invoice_resp.status_code, 403)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_customer_payment_list_is_scoped_and_dashboard_is_staff_only(self):
+        payment_a = Payment.objects.create(
+            invoice=self.inv_a, amount=Decimal("10.00"), payment_method="cash",
+            payment_date=datetime.date(2026, 2, 5),
+        )
+        payment_b = Payment.objects.create(
+            invoice=self.inv_b, amount=Decimal("20.00"), payment_method="cash",
+            payment_date=datetime.date(2026, 2, 5),
+        )
+        self.client.force_authenticate(user=self.cust_a)
+        response = self.client.get("/api/billing/my/payments/")
+        self.assertEqual(response.status_code, 200)
+        ids = [item["id"] for item in response.data]
+        self.assertEqual(ids, [payment_a.id])
+        self.assertNotIn(payment_b.id, ids)
+        self.assertEqual(self.client.get("/api/billing/dashboard/summary/").status_code, 403)
+
+    def test_internal_django_staff_flag_does_not_grant_billing_role(self):
+        self.cust_a.is_staff = True
+        self.cust_a.save(update_fields=["is_staff"])
+        self.client.force_authenticate(user=self.cust_a)
+        self.assertEqual(self.client.get("/api/billing/invoices/").status_code, 403)
+
     def test_staff_can_view_all_invoices(self):
         self.client.force_authenticate(user=self.staff)
         resp = self.client.get("/api/billing/invoices/")
@@ -139,6 +180,21 @@ class BillingApiTests(TestCase):
         self.client.force_authenticate(user=self.admin)
         admin_create = self.client.post("/api/billing/discounts/", data=post_data, format="json")
         self.assertEqual(admin_create.status_code, 201)
+        discount_id = admin_create.data["id"]
+
+        self.client.force_authenticate(user=self.staff)
+        staff_update = self.client.patch(
+            f"/api/billing/discounts/{discount_id}/", {"value": "25.00"}, format="json"
+        )
+        self.assertEqual(staff_update.status_code, 403)
+
+        self.client.force_authenticate(user=self.admin)
+        invalid_related_id = self.client.post(
+            "/api/billing/discounts/",
+            data={**post_data, "applies_to": "product", "products": [999999]},
+            format="json",
+        )
+        self.assertEqual(invalid_related_id.status_code, 400)
 
     def test_dashboard_summary_metrics(self):
         self.client.force_authenticate(user=self.staff)

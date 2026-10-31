@@ -213,61 +213,34 @@ a browser-rendering check and refuses servers without the isolated-test marker.
 
 ---
 
-# Billing, Invoices & Payments Subsystem (Adwaith)
+# Billing, Invoices & Payments (Adwaith)
 
-## App Structure & Overview
+The `billing` app contains invoice, invoice-line, discount and payment models,
+services, APIs and management commands. It is implemented on `feat/billing`,
+but is not enabled in shared default settings yet: billing depends on Haridev's
+actual `products` and `subscriptions` apps, which are not present in the
+fetched repository. `billing/tests/fixtures/` supplies test-only models; it is
+not the production schema or a substitute for those apps.
 
-```
-billing/
-├── models.py               # Discount, Invoice, InvoiceLine, Payment
-├── services.py             # Business logic: batch billing, discount engine, payments, reconciliation
-├── serializers.py          # DRF serializers (detail, list, create, dashboard)
-├── views.py                # 13 REST API endpoints for Staff, Admin, and Customer Portal
-├── urls.py                 # Route definitions under /api/billing/
-├── permissions.py          # Application-role permissions (Admin, Staff, Customer/Owner)
-├── signals.py              # Payment post_save/post_delete -> Invoice state reconciliation
-├── management/commands/    # CLI command: generate_invoices
-└── tests/                  # Exhaustive tests for models, services, concurrency, and views
-```
+## Integration status
 
-## Billing App Integration Guide
+- Arjun's auth foundation is merged into `main` and included in this branch.
+- Billing routes are mounted only when `billing` is installed. The app is
+  intentionally absent from default `INSTALLED_APPS` until the production
+  dependency apps are delivered together.
+- `billing/migrations/` has no schema migration. Generate one only after the
+  actual product/subscription models are available and their migration names
+  are known. Review the migration plan against each existing database before
+  applying it; never reset a working database.
+- TaxRule is expected to be owned by the subscriptions/catalog feature, based
+  on the current billing contract. Haridev must confirm that ownership and the
+  field contract before production integration.
 
-### 1. Add to `INSTALLED_APPS` (in `config/settings.py`)
+See [docs/BILLING_INTEGRATION.md](docs/BILLING_INTEGRATION.md) for the exact
+model contract, current API surface, dashboard semantics and handoff steps.
+`PROJECT_REPORT.md` records the executed checks and remaining limitations.
 
-```python
-INSTALLED_APPS = [
-    # ... Arjun's foundation apps ...
-    "billing",            # Billing, Invoices & Payments
-]
-```
-
-### 2. Include URLs (in `config/urls.py`)
-
-```python
-urlpatterns = [
-    # ...
-    path("api/billing/", include("billing.urls")),
-]
-```
-
-### 3. Model Dependencies Agreement (with Haridev - Subscriptions & Products)
-
-The billing app references the catalog and subscription models using string references and dynamic resolution (`apps.get_model()`). The agreed field contracts are:
-
-| Model Reference | Required Contract / Fields |
-| :--- | :--- |
-| `subscriptions.Subscription` | `customer` (`settings.AUTH_USER_MODEL`), `plan` (`FK->Plan`), `status` (`'active'`, `'paused'`, `'closed'`), `current_period_start`, `current_period_end`, `payment_terms_days`, `lines` (related name for lines) |
-| `subscriptions.SubscriptionLine` | `product` (`FK->Product`), `product_variant` (nullable `FK->ProductVariant`), `quantity`, `unit_price`, `tax_rule` (nullable `FK->TaxRule`) |
-| `subscriptions.TaxRule` | `name`, `rate` (`DecimalField` percentage e.g. 18.00), `is_active` |
-| `products.Product` | `name`, `sales_price`, `cost_price` |
-| `products.ProductVariant` | `name`, `price_extra` |
-| `subscriptions.Plan` | `billing_interval` (`'daily'`, `'weekly'`, `'monthly'`, `'yearly'`) |
-
-> **TaxRule Ownership Note**: Tax rules are configured by the Admin to apply to subscription lines and products. Per the agreed division, the catalog/subscription module defines `TaxRule`, and `billing` consumes it during invoice generation.
-
-### 4. Billing-Day Run Command
-
-```powershell
-python manage.py generate_invoices
-python manage.py generate_invoices --date 2026-10-31
-```
+The batch command `manage.py generate_invoices` exists; no scheduler is
+configured. Invoice JSON endpoints exist in code; PDF generation, printing
+and invoice email delivery are not implemented. Dashboard response time has
+not been measured.
