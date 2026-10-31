@@ -53,6 +53,10 @@ steps.
 - No production migration drift check or subscription-to-dashboard integration
   against real models is possible until those models and migration files exist.
 - The working database was not migrated, reset or otherwise modified.
+- Commit 37c3253 is present on the local feat/billing branch. Publication is
+  blocked: the Git CLI has no write credentials (push reports it cannot prompt
+  for a password), and the connected GitHub app rejected repository writes
+  with HTTP 403. The remote feat/billing branch and PR do not exist yet.
 
 ## Implemented billing behavior and limits
 
