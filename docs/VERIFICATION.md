@@ -15,6 +15,16 @@
 - `python -m pip check`: no broken requirements.
 - `python manage.py check`: no issues.
 - Existing PostgreSQL server readiness: `localhost:7129` accepts connections.
+- **Working database verified:** Django connected to `subscription_management`
+  using the private `.env`, initially found zero public tables and consistent
+  history, then reviewed and applied all 16 pending migrations. The resulting
+  database has 10 public tables and zero pending migrations. `showmigrations`
+  marks every migration applied. No database reset or recreation was performed.
+- Against the working database, `manage.py check` and
+  `makemigrations --check --dry-run` passed. The normal Django server started on
+  `127.0.0.1:8000`. Read-only HTTP requests returned 200 for all four public auth
+  pages and CSS/JS assets, 302 for anonymous `/account/`, and 403 for anonymous
+  `/api/auth/me/`. No test accounts were created in the working database.
 - Independent password-protected PostgreSQL 18 cluster initialized on
   `127.0.0.1:7130`, with the separate `test_subscription_management` database.
 - Against that isolated database: `check_database`, `migrate --plan`, first
@@ -49,22 +59,20 @@
 - `manage.py collectstatic --noinput`: 30 static files collected successfully.
 - `git diff --check`: no whitespace errors.
 
-## Not verified / remaining integration work
+## Verification limits and deployment configuration
 
-- Working database login/schema/migrations: Django now reads a non-empty password,
-  but PostgreSQL rejects the configured username/password pair. Credential-presence
-  checks did not display values. No migrations or data changes were made on the
-  working server. Run the hidden local prompt `scripts/configure_database.py`
-  with a valid PostgreSQL login, then retry `check_database`.
+- The earlier credential rejection was resolved after the user saved valid
+  credentials locally. Values were not displayed or committed.
 - Django-served frontend pages are implemented and covered by template/session
   tests and real HTTP checks. Visual layout and browser form interactions remain
   unverified by the blocked automated browser tool.
 - Automated browser run: the Computer Use tool stopped because it could not
-  verify Chrome's current URL. **No browser test is claimed as passed.**
+  verify Chrome's current URL; a later availability check still reported that
+  the browser access host was unavailable. **No browser test is claimed as passed.**
 - Live SMTP/inbox delivery: not configured or attempted. Tests used an in-memory
   outbox. Console email is development output only.
 - Deployment/proxy/scheduler configuration and teammate business features were
-  not performed. Public deployment needs the real frontend, HTTPS, tested mail,
+  not performed. Public deployment needs browser QA, HTTPS, tested mail,
   accurate proxy client identity, and deployment-specific checks.
 
 Use the README's exact setup/migration/test commands. Review compatibility with
