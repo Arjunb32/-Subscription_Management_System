@@ -125,4 +125,28 @@ The authenticated demo-customer-A portal was checked in the browser on all three
 
 This browser review found two integration presentation defects and fixes them on the local review branch `codex/dashboard-integration-polish`: the dashboard JavaScript expected a subscription-status control missing from its template, which stopped the page script; and at a 390 × 844 viewport the navigation was squeezed to 62 px. The template now includes the status selector, and the mobile header gives the navigation its own full-width row. After the fix, dashboard rendering and filters worked, the navigation occupied 339 px of the 375 px document, and the page had no horizontal document overflow. A mobile screenshot was captured in the review session.
 
-The first test rerun tried to rebuild an existing isolated test database and stopped during setup with `relation "accounts_user" does not exist`; no test ran in that attempt. I then created a separate fresh `test_integration_keep` database, applied all migrations, and ran `manage.py test --settings=config.integration_settings --keepdb --noinput`: **127 tests passed in 68.925 seconds**, with no system-check issues. `node scripts/test_frontend.mjs`, the real HTTP smoke script, JavaScript syntax, and Git whitespace checks also passed. Browser screenshots were captured in this review session. Full-page performance and deployment behavior remain unchecked here. The review fixes and report update are local on `codex/dashboard-integration-polish`; they are not pushed to `codex/integration` or added to PR #3.
+
+## 12. Final dashboard handoff verification (31 October 2026)
+
+The team integration branch advanced to `dbbe2b3`, which includes the dashboard startup/status-filter fix, responsive filter styling, mobile navigation fix, and stricter template-bound frontend checks. The handoff branch is based on that current integration head; it does not replay those shared changes. Customer subscription actions now announce progress, disable the selected button while the request runs, announce success, and refresh the row. A browser pause/resume check returned the demo subscription to Active.
+
+The integrated Django suite was rerun on the isolated PostgreSQL database `test_integration_keep`: **127 tests passed in 53.105 seconds**, with no system-check issues. The template-bound frontend module check passed, covering dashboard startup, status-filter/reset, pagination, error handling, and customer-scoped action routing. `node --check` and `git diff --check` passed. Earlier browser and HTTP checks in section 11 verified customer A/B isolation, live billing totals, desktop/mobile layout, and denied cross-customer detail and write requests.
+
+A fresh backend benchmark used the separately named `test_subscription_perf` database on the loopback PostgreSQL 18.6 test server. It contained 5,000 subscriptions, 10,000 subscription lines, 10,000 invoices, 20,000 invoice lines, 10,000 payments, and two customers. Environment: Windows 10 build 19045, Python 3.14.8, PostgreSQL 18.6. Each route had one cold request and five warm requests through Django's request/response client; measurements exclude network latency and browser rendering.
+
+| Route | Cold ms | Warm median ms | Warm max ms |
+|---|---:|---:|---:|
+| `/api/subscriptions/` | 52.02 | 23.38 | 31.61 |
+| `/api/subscriptions/?page=200` | 33.77 | 34.68 | 39.82 |
+| `/api/subscriptions/?customer=2` | 29.85 | 30.65 | 31.87 |
+| `/api/billing/invoices/` | 68.56 | 38.93 | 40.30 |
+| `/api/billing/payments/` | 49.83 | 74.03 | 79.67 |
+| `/api/billing/dashboard/summary/` | 42.22 | 34.76 | 38.32 |
+| `/dashboard/` | 34.58 | 4.51 | 5.19 |
+| `/manage/subscriptions/` | 6.04 | 4.31 | 5.76 |
+| `/api/my/subscriptions/` | 37.10 | 34.58 | 36.39 |
+| `/api/billing/my/invoices/` | 42.73 | 40.84 | 45.94 |
+| `/api/billing/my/payments/` | 71.32 | 63.02 | 78.47 |
+| `/portal/` | 13.70 | 4.35 | 5.35 |
+
+All measured backend responses were under two seconds in this local synthetic-data run. This does not establish production capacity, concurrent-load performance, or full browser page-load timing. External email delivery, invoice scheduling, deployment, and production configuration remain outside these dashboard checks. The fixes and report are committed on `codex/dashboard-handoff`, based on the latest `origin/codex/integration`; review and publication status is recorded in the PR handoff.
