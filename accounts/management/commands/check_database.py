@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connection
+from django.db import connection, OperationalError
 from django.db.migrations.executor import MigrationExecutor
 
 
@@ -26,5 +26,19 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"Migration history is consistent; {len(plan)} pending migration(s)."))
         except CommandError:
             raise
+        except OperationalError as exc:
+            # Classify without exposing the connection string, username or password.
+            error = str(exc).lower()
+            if "no password supplied" in error:
+                reason = "DB_PASSWORD is empty or was not read from the local environment."
+            elif "password authentication failed" in error:
+                reason = "PostgreSQL rejected the configured credentials. Verify DB_USER and DB_PASSWORD locally."
+            elif "does not exist" in error:
+                reason = "The configured database or database role does not exist. Verify local DB_NAME and DB_USER."
+            elif "permission denied" in error:
+                reason = "The database role lacks access. Ask the database owner to review privileges."
+            else:
+                reason = "Check DB_HOST, DB_PORT, PostgreSQL readiness and local access configuration."
+            raise CommandError(f"Database connection failed. {reason} Credentials are never printed.") from None
         except Exception:
             raise CommandError("Database diagnostic failed. Check local DB_* settings and server access; credentials are never printed.") from None

@@ -196,8 +196,9 @@ class PasswordResetTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [self.user.email])
         link = next(line for line in mail.outbox[0].body.splitlines() if line.startswith("http"))
-        self.assertTrue(link.startswith(settings.PASSWORD_RESET_URL + "?"))
-        params = parse_qs(urlsplit(link).query)
+        self.assertTrue(link.startswith(settings.PASSWORD_RESET_URL + "#"))
+        self.assertEqual(urlsplit(link).query, "")
+        params = parse_qs(urlsplit(link).fragment)
         self.assertTrue(default_token_generator.check_token(self.user, params["token"][0]))
         self.assertNotIn(params["token"][0], str(existing.json()))
 
@@ -366,6 +367,19 @@ class ModelAndCommandTests(TestCase):
         output = StringIO()
         call_command("check_database", stdout=output)
         self.assertIn("Migration history is consistent", output.getvalue())
+
+    def test_database_diagnostic_refuses_legacy_user_table(self):
+        with patch("accounts.management.commands.check_database.connection.introspection.table_names", return_value=["auth_user"]):
+            with self.assertRaisesMessage(CommandError, "Existing auth_user table"):
+                call_command("check_database", stdout=StringIO())
+
+    def test_database_diagnostic_does_not_expose_connection_secrets(self):
+        from django.db import OperationalError
+        with patch("accounts.management.commands.check_database.connection.cursor", side_effect=OperationalError("no password supplied; private connection details")):
+            with self.assertRaises(CommandError) as caught:
+                call_command("check_database", stdout=StringIO())
+        self.assertIn("DB_PASSWORD is empty", str(caught.exception))
+        self.assertNotIn("private connection details", str(caught.exception))
 
 
 class ConcurrencyTests(TransactionTestCase):

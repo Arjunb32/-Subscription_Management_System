@@ -1,0 +1,36 @@
+:root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #203431; background: #f3f6f4; line-height: 1.5; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #17694d; text-underline-offset: 3px; }
+a:hover { color: #0a4632; }
+.site-header { min-height: 84px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px max(24px, calc((100vw - 1120px) / 2)); border-bottom: 1px solid #dde6e0; background: #fff; }
+.brand { display: flex; align-items: center; gap: 12px; font-weight: 700; color: #203431; text-decoration: none; font-size: 16px; }
+.brand-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: #17694d; color: #fff; font-size: 20px; }
+.auth-layout { padding: 56px 20px; }
+.auth-card { width: 100%; max-width: 480px; margin: auto; padding: 36px; background: #fff; border: 1px solid #dde6e0; border-radius: 16px; box-shadow: 0 12px 36px #183f2910; }
+.eyebrow { color: #17694d; font-weight: 700; font-size: 12px; letter-spacing: .12em; margin: 0 0 12px; }
+h1 { font-size: clamp(24px, 4vw, 30px); line-height: 1.2; letter-spacing: -.025em; margin: 0 0 12px; }
+h2 { font-size: 20px; margin: 0 0 8px; }
+.intro { margin: 0 0 28px; color: #5c6f68; }
+label { display: block; font-size: 14px; font-weight: 650; margin: 18px 0 7px; }
+input { width: 100%; min-height: 46px; padding: 11px 12px; border: 1px solid #9ead9f; border-radius: 7px; background: #fff; color: #203431; font: inherit; }
+input:focus, button:focus-visible, a:focus-visible { outline: 3px solid #8cc7af; outline-offset: 3px; }
+button { display: block; width: 100%; padding: 13px 18px; margin-top: 24px; border: 1px solid #17694d; border-radius: 7px; background: #17694d; color: #fff; font: inherit; font-weight: 650; cursor: pointer; }
+button:hover { background: #10573f; }
+button:disabled { opacity: .6; cursor: wait; }
+.secondary { color: #17694d; background: #fff; }
+.secondary:hover { background: #edf6f0; }
+.help { color: #596d64; font-size: 13px; margin: 8px 0 0; }
+.form-link { display: block; text-align: right; font-size: 14px; margin-top: 14px; }
+.footnote { text-align: center; color: #5c6f68; font-size: 14px; margin: 26px 0 0; }
+.feedback { white-space: pre-line; padding: 13px 15px; margin-top: 22px; background: #fff1ee; color: #8b3025; border: 1px solid #e2b9af; border-radius: 7px; font-size: 14px; }
+.feedback.success { background: #edf8f0; color: #155c3d; border-color: #9ac7ab; }
+.account-details { padding: 18px; border-radius: 8px; background: #f3f6f4; }
+dt { color: #5c6f68; font-size: 13px; }
+dd { margin: 4px 0 16px; overflow-wrap: anywhere; }
+dd:last-child { margin-bottom: 0; }
+.badge { display: inline-block; border-radius: 20px; padding: 2px 10px; background: #dceee4; color: #155c3d; text-transform: capitalize; font-size: 14px; }
+.staff-section { border-top: 1px solid #dde6e0; margin-top: 28px; padding-top: 26px; }
+.noscript { text-align: center; padding: 16px; }
+[hidden] { display: none !important; }
+@media (max-width: 520px) { .site-header { min-height: 72px; padding: 16px; } .brand { font-size: 13px; gap: 8px; } .site-header > a:last-child { font-size: 13px; } .auth-layout { padding: 28px 16px; } .auth-card { padding: 26px 22px; } }

@@ -46,7 +46,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 TEMPLATES = [{
     "BACKEND": "django.template.backends.django.DjangoTemplates",
     "DIRS": [], "APP_DIRS": True,
-    "OPTIONS": {"context_processors": []},
+    "OPTIONS": {"context_processors": ["django.template.context_processors.request"]},
 }]
 DATABASES = {"default": {
     "ENGINE": "django.db.backends.postgresql",
@@ -92,7 +92,7 @@ EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
 EMAIL_TIMEOUT = 10
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@example.invalid")
-PASSWORD_RESET_URL = os.environ.get("PASSWORD_RESET_URL", "http://localhost:8000/reset-password")
+PASSWORD_RESET_URL = os.environ.get("PASSWORD_RESET_URL", "http://localhost:8000/reset-password/")
 reset_url = urlsplit(PASSWORD_RESET_URL)
 if reset_url.scheme not in {"http", "https"} or not reset_url.netloc or reset_url.query or reset_url.fragment:
     raise ImproperlyConfigured("PASSWORD_RESET_URL must be an absolute URL without query/fragment.")
@@ -101,5 +101,6 @@ if not DEBUG and (reset_url.scheme != "https" or not EMAIL_HOST):
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_TZ = True
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

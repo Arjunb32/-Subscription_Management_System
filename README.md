@@ -7,9 +7,9 @@ the subscription, billing/payments, and reporting/customer-portal teammates.
 ## Current repository and boundaries
 
 Inspected both `main` and `feature/authentication`: both contained only the initial
-README. The local `HACKATHON_PLAN.md` is preserved. No existing frontend or login
-screens were found, so this change does not generate replacement screens. The
-frontend origin and its integration remain unverified.
+README. The local `HACKATHON_PLAN.md` is preserved. The team confirmed this is a
+new project. Authentication pages now use Django templates, CSS and JavaScript
+served by this same backend; no Node/frontend framework is required.
 
 ## First setup (each teammate, PowerShell)
 
@@ -22,6 +22,13 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip check
 .\.venv\Scripts\python.exe scripts/create_env.py
 notepad .env
+```
+
+To enter the database username and password without displaying the password or
+placing it in command history, optionally run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/configure_database.py
 ```
 
 If `python` is unavailable but the Windows launcher is installed, use
@@ -58,6 +65,13 @@ Then check compatibility **before** applying migrations:
 .\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
 .\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
 ```
+
+Open `http://127.0.0.1:8000/`. Pages: `/login/`, `/signup/`,
+`/password-reset/`, `/reset-password/`, and the signed-in `/account/` view.
+Application admins also get a staff-creation form on their account page.
+These pages and `/api/` run at the **same origin**; no proxy or CORS configuration
+is needed. Set PASSWORD_RESET_URL to your local server's exact `/reset-password/`
+URL; use the same hostname throughout.
 
 Stop if `check_database` reports existing/incompatible authentication tables or
 history. Do not delete tables, reset the database, fake migrations, or switch the
@@ -116,6 +130,53 @@ own test records. Test data is disposable; working data is not.
 1. Foundation: shared configuration, locked dependencies, custom user model,
    migrations, database diagnostic, and this setup guide.
 2. Authentication: DRF endpoints, role/ownership helpers, initial-admin command,
-   password reset, attempt limiting, and JavaScript integration examples.
+   password reset and attempt limiting.
+3. Integration: Django authentication pages, JavaScript client and team docs.
 
 Work stays on `feat/auth-roles`. No automatic push or merge is performed.
+
+## Authentication handoff
+
+The authentication implementation and JavaScript examples are documented in
+[docs/AUTHENTICATION.md](docs/AUTHENTICATION.md). After migrating, create your
+local application admin interactively:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py create_initial_admin
+```
+
+No credentials are supplied by this repository. Login uses sessions and CSRF;
+role and customer ownership checks run on the server. Console reset emails are
+development output, not actual delivery. Business features are not included.
+
+## Optional browser API verification
+
+After starting the isolated PostgreSQL server, run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/test_postgres.py run migrate --settings=config.browser_settings
+.\.venv\Scripts\python.exe scripts/test_postgres.py run runserver 127.0.0.1:8001 --noreload --settings=config.browser_settings
+```
+
+Open `http://127.0.0.1:8001/__verification__/` in a browser. The test-only harness
+imports the shipped JavaScript client and checks signup, login/session persistence,
+CSRF rejection, role rejection, logout and generic reset acknowledgement. It uses
+generated disposable credentials in the isolated test database and prints no
+passwords. It is not a replacement product screen. These routes are absent from
+the default application configuration. HTTP/browser checks use `test_auth_http`,
+separate from the unit suite's `test_subscription_management`, so manual test
+accounts do not contaminate unit tests. Stop Django with Ctrl+C, then stop the
+isolated PostgreSQL server using the command above.
+
+The implementation session's automated browser check was blocked by the browser
+tool's inability to verify Chrome's current URL. See
+[docs/VERIFICATION.md](docs/VERIFICATION.md) for checks that actually ran.
+
+While the isolated verification server runs, a repeatable HTTP check is:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/http_smoke.py
+```
+
+It verifies pages, assets, cookie sessions and API behavior over HTTP. It is not
+a browser-rendering check and refuses servers without the isolated-test marker.
