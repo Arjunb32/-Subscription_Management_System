@@ -34,7 +34,7 @@ if(root) {
         const td=make('td');
         for(const action of row.permitted_actions) {
           const button=make('button',action,{type:'button',className:'text-button'});
-          button.addEventListener('click',async()=>{button.disabled=true;try{await apiRequest(`${root.dataset.subscriptionsUrl}${row.id}/actions/${action}/`,{method:'POST',data:{}});await load();}catch(exc){error(exc);button.disabled=false;}});td.append(button);
+          button.addEventListener('click',async()=>{const label=button.textContent;button.disabled=true;button.textContent='Working…';if(portal){text('portal-action-status',`Updating subscription (${action})…`);hide('portal-action-status',false);}try{await apiRequest(`${root.dataset.subscriptionsUrl}${row.id}/actions/${action}/`,{method:'POST',data:{}});if(portal)text('portal-action-status',`Subscription updated successfully (${action}).`);await load();}catch(exc){if(portal)hide('portal-action-status');error(exc);button.disabled=false;button.textContent=label;}});td.append(button);
         }tr.append(td);
       }body.append(tr);
     }
