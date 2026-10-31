@@ -1,5 +1,11 @@
 # Products/subscriptions integration handoff — 31 October 2026
 
+> Historical implementation handoff. The integration and latest dashboard handoff
+> have since been prepared for consolidation into main. Follow
+> [REPOSITORY_STATUS.md](REPOSITORY_STATUS.md) for the current shared branch and
+> team workflow; the original publication statements below describe the earlier
+> handoff, not the repository after consolidation.
+
 ## Local review state
 
 Review **`codex/integration`**. No pushes, PR creation or merge into main were

@@ -1,10 +1,22 @@
 # Subscription Management System
 
+## Current shared version
+
+Use `main` for the combined application: authentication, products, plans,
+quotations, subscriptions, billing, dashboard and customer portal. The completed
+feature and integration branches have been consolidated; `feat/billing` remains
+available for Adwaith's active scheduling work. New work uses a short-lived
+branch from current main and a pull request back to main.
+
+See [repository status and team workflow](docs/REPOSITORY_STATUS.md) for the
+branch policy and remaining email, scheduling and deployment work. Historical
+handoff/report documents record earlier stages and do not replace this status.
+
 Python 3.11, Django/DRF, PostgreSQL and same-origin Django templates/CSS/JavaScript.
-The local `codex/integration` branch contains authentication, production catalog,
+The consolidated application includes authentication, production catalog,
 quotations/subscriptions, Adwaith's billing and Sreehari's dashboard/customer
-portal. It has not been pushed or merged into main. Browser desktop/mobile QA,
-live inbox delivery and deployed scheduling remain open.
+portal. Live inbox delivery, deployed scheduling and public deployment remain
+open; see the current status document for responsibilities and recorded evidence.
 
 Arjun owns authentication, shared setup/integration and the products, plans,
 quotations and subscriptions takeover. Adwaith owns billing/payments and finance;
