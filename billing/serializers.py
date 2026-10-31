@@ -172,6 +172,21 @@ class InvoiceDetailSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def validate(self, attrs):
+        """Keep manual invoice headers tied to the subscription's customer."""
+        subscription = attrs.get("subscription", getattr(self.instance, "subscription", None))
+        customer = attrs.get("customer", getattr(self.instance, "customer", None))
+        if subscription and customer and subscription.customer_id != customer.pk:
+            raise serializers.ValidationError(
+                {"customer": "Customer must match the selected subscription."}
+            )
+
+        if self.instance is None and attrs.get("status", Invoice.Status.DRAFT) != Invoice.Status.DRAFT:
+            raise serializers.ValidationError(
+                {"status": "Manual invoices must be created as drafts."}
+            )
+        return attrs
+
 
 # ---------------------------------------------------------------------------
 # Payment

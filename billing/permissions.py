@@ -34,6 +34,19 @@ class IsApplicationStaffOrAdmin(BasePermission):
         )
 
 
+class IsApplicationCustomer(BasePermission):
+    """Allows only active users assigned the application customer role."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and user.is_active
+            and user.role == User.Role.CUSTOMER
+        )
+
+
 class IsInvoiceCustomerOrStaff(BasePermission):
     """
     Object-level permission for invoices and payments:

@@ -6,6 +6,7 @@ import datetime
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -145,6 +146,15 @@ class BillingApiTests(TestCase):
         self.assertNotIn(payment_b.id, ids)
         self.assertEqual(self.client.get("/api/billing/dashboard/summary/").status_code, 403)
 
+    def test_customer_portal_rejects_staff_and_admin_roles(self):
+        self.client.force_authenticate(user=self.staff)
+        self.assertEqual(self.client.get("/api/billing/my/invoices/").status_code, 403)
+        self.assertEqual(self.client.get("/api/billing/my/payments/").status_code, 403)
+
+        self.client.force_authenticate(user=self.admin)
+        self.assertEqual(self.client.get("/api/billing/my/invoices/").status_code, 403)
+        self.assertEqual(self.client.get("/api/billing/my/payments/").status_code, 403)
+
     def test_internal_django_staff_flag_does_not_grant_billing_role(self):
         self.cust_a.is_staff = True
         self.cust_a.save(update_fields=["is_staff"])
@@ -158,6 +168,56 @@ class BillingApiTests(TestCase):
         ids = [item["id"] for item in resp.data] if isinstance(resp.data, list) else [item["id"] for item in resp.data.get("results", [])]
         self.assertIn(self.inv_a.id, ids)
         self.assertIn(self.inv_b.id, ids)
+
+    def test_manual_invoice_rejects_mismatched_customer_and_subscription(self):
+        self.client.force_authenticate(user=self.staff)
+        response = self.client.post(
+            "/api/billing/invoices/",
+            data={
+                "subscription": self.sub_a.id,
+                "customer": self.cust_b.id,
+                "issue_date": "2026-03-01",
+                "due_date": "2026-03-15",
+                "period_start": "2026-02-01",
+                "period_end": "2026-03-01",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("customer", response.data)
+
+    def test_staff_can_send_confirmed_invoice_and_customer_can_print_own_invoice(self):
+        self.client.force_authenticate(user=self.staff)
+        send_response = self.client.post(f"/api/billing/invoices/{self.inv_a.id}/send/", format="json")
+        self.assertEqual(send_response.status_code, 202)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.cust_a.email])
+        self.assertIn(self.inv_a.invoice_number, mail.outbox[0].subject)
+
+        self.client.force_authenticate(user=self.cust_a)
+        print_response = self.client.get(f"/api/billing/invoices/{self.inv_a.id}/print/")
+        self.assertEqual(print_response.status_code, 200)
+        self.assertIn(self.inv_a.invoice_number, print_response.content.decode())
+
+        self.client.force_authenticate(user=self.cust_b)
+        denied_response = self.client.get(f"/api/billing/invoices/{self.inv_a.id}/print/")
+        self.assertEqual(denied_response.status_code, 404)
+
+    def test_draft_invoice_cannot_be_sent(self):
+        draft = Invoice.objects.create(
+            subscription=self.sub_a,
+            customer=self.cust_a,
+            issue_date=datetime.date(2026, 3, 1),
+            due_date=datetime.date(2026, 3, 15),
+            period_start=datetime.date(2026, 2, 1),
+            period_end=datetime.date(2026, 3, 1),
+            total=Decimal("100.00"),
+            status=Invoice.Status.DRAFT,
+        )
+        self.client.force_authenticate(user=self.staff)
+        response = self.client.post(f"/api/billing/invoices/{draft.id}/send/", format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_admin_only_discount_mutations(self):
         # Staff can list discounts

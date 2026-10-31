@@ -53,6 +53,8 @@ until the dependent apps are integrated.
 | `GET /invoices/{id}/` | Owner, staff/admin | Invoice details and lines. |
 | `POST /invoices/{id}/confirm/` | Staff/admin | Confirm a draft invoice. |
 | `POST /invoices/{id}/cancel/` | Staff/admin | Cancel an unpaid draft/confirmed invoice. |
+| `POST /invoices/{id}/send/` | Staff/admin | Send a confirmed or paid invoice to the customer email. |
+| `GET /invoices/{id}/print/` | Owner, staff/admin | Print-ready HTML invoice. |
 | `POST /invoices/generate/` | Staff/admin | Generate due invoices; optional `billing_date`. |
 | `GET, POST /payments/` | Staff/admin | List or record a payment. Payments are partial; overpayment is rejected. |
 | `GET /payments/{id}/` | Staff/admin | Payment detail. |
@@ -63,13 +65,60 @@ until the dependent apps are integrated.
 | `GET /dashboard/summary/` | Staff/admin | Global billing metrics. |
 | `GET /my/invoices/`, `GET /my/payments/` | Customer | Customer's own records. |
 
-Sreehari can consume `GET /api/billing/dashboard/summary/` for staff finance
-metrics and the two `/my/` lists for customer billing history after the models
-and settings integration are complete. The summary currently performs multiple
-database queries; its response time has not been measured. `active_subscriptions`
-is currently a global count. The response separates billed revenue, collected
-payments and outstanding receivables, and excludes cancelled invoices where
-appropriate.
+All API views use DRF session authentication. Browser writes require the normal
+CSRF token. The `/my/` paths accept only an active application customer role;
+staff and admins use the global staff paths. Invoice detail and print access
+are scoped to the owning customer for customers and are global for staff/admin.
+
+## Dashboard and customer-billing contract for Srihari
+
+Srihari should use these endpoints after the real models, migrations and app
+settings are integrated. The dashboard endpoint deliberately owns its metric
+calculations; do not reproduce these aggregates in a screen or another API.
+
+| Endpoint | Filters | Response/use |
+|---|---|---|
+| `GET /api/billing/dashboard/summary/` | None | Global staff/admin finance metrics. |
+| `GET /api/billing/invoices/` | `status`, `customer`, `issue_date_from` (inclusive), `due_date_to` (inclusive), `overdue=true` or `1` | Global staff/admin invoice table. |
+| `GET /api/billing/payments/` | `invoice`, `payment_method`, `date_from` (inclusive), `date_to` (inclusive) | Global staff/admin payment table. |
+| `GET /api/billing/my/invoices/` | None | Current customer's invoice history only. |
+| `GET /api/billing/my/payments/` | None | Current customer's payment history only. |
+| `GET /api/billing/invoices/{id}/` | Path ID | Itemized invoice detail for its owner or staff/admin. |
+| `GET /api/billing/invoices/{id}/print/` | Path ID | HTML suitable for the browser print dialog. |
+
+Example dashboard response:
+
+```json
+{
+  "active_subscriptions": 12,
+  "billed_revenue": "330.00",
+  "payments_collected": "50.00",
+  "total_outstanding": "280.00",
+  "overdue_invoices": 2,
+  "invoices_by_status": {"draft": 1, "confirmed": 3, "paid": 4, "cancelled": 1},
+  "revenue_this_month": "200.00",
+  "payments_this_month": "50.00"
+}
+```
+
+Metric definitions:
+
+- `active_subscriptions`: count of subscriptions whose status is `active`.
+- `billed_revenue`: sum of invoice `total` where status is `confirmed` or
+  `paid`.
+- `payments_collected`: sum of payments on invoices that are not cancelled.
+- `total_outstanding`: sum of `total - amount_paid` for confirmed invoices
+  with a remaining balance.
+- `overdue_invoices`: count of confirmed invoices with a remaining balance and
+  `due_date` before today.
+- `invoices_by_status`: count of every invoice grouped by its current status.
+- `revenue_this_month`: billed revenue for invoices issued on or after the
+  first day of the current month.
+- `payments_this_month`: collected payments dated on or after the first day of
+  the current month, excluding payments on cancelled invoices.
+
+The summary currently performs multiple database queries and has not received
+a response-time measurement. `active_subscriptions` is global.
 
 ## Integration steps
 
@@ -91,7 +140,14 @@ appropriate.
 
 ## Remaining product/infrastructure work
 
-`generate_invoices` is a management command, not a configured scheduler.
-Invoice PDF/print output and invoice email delivery are not implemented. No
-customer billing UI is included here. Payment refunds/voids are not modeled;
-cancellation is rejected once a payment has been recorded.
+`generate_invoices` is a management command, not a configured scheduler. A
+deployment must configure and monitor an external scheduler before it can claim
+automatic generation.
+
+`POST /invoices/{id}/send/` sends a plain-text email through Django's configured
+email backend for confirmed and paid invoices. It does not record delivery,
+retries, or a sent timestamp, and it does not attach a PDF. The print route
+renders print-ready HTML rather than a PDF. The billing management screens need
+to surface send failures and invoke the browser print dialog. Payment
+refunds/voids are not modeled; cancellation is rejected once a payment has
+been recorded.

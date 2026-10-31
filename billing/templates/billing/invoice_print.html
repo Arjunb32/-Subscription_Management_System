@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Invoice {{ invoice.invoice_number }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #222; margin: 2rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border-bottom: 1px solid #ddd; padding: .5rem; text-align: left; }
+    .amount { text-align: right; }
+    .summary { margin-left: auto; max-width: 22rem; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>
+  <h1>Invoice {{ invoice.invoice_number }}</h1>
+  <p>
+    Customer: {{ invoice.customer.email }}<br>
+    Issue date: {{ invoice.issue_date }}<br>
+    Due date: {{ invoice.due_date }}<br>
+    Billing period: {{ invoice.period_start }} to {{ invoice.period_end }}<br>
+    Status: {{ invoice.get_status_display }}
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Description</th><th>Quantity</th><th class="amount">Unit price</th><th class="amount">Tax</th><th class="amount">Total</th></tr>
+    </thead>
+    <tbody>
+      {% for line in invoice.lines.all %}
+      <tr>
+        <td>{{ line.description }}</td>
+        <td>{{ line.quantity }}</td>
+        <td class="amount">{{ line.unit_price }}</td>
+        <td class="amount">{{ line.tax_amount }}</td>
+        <td class="amount">{{ line.line_total }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">No invoice lines have been recorded.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="summary">
+    <tr><th>Subtotal</th><td class="amount">{{ invoice.subtotal }}</td></tr>
+    <tr><th>Discount</th><td class="amount">{{ invoice.discount_amount }}</td></tr>
+    <tr><th>Tax</th><td class="amount">{{ invoice.tax_amount }}</td></tr>
+    <tr><th>Total</th><td class="amount">{{ invoice.total }}</td></tr>
+    <tr><th>Paid</th><td class="amount">{{ invoice.amount_paid }}</td></tr>
+    <tr><th>Amount due</th><td class="amount">{{ invoice.amount_due }}</td></tr>
+  </table>
+</body>
+</html>

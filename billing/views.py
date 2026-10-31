@@ -7,6 +7,8 @@ Staff / Admin:
     GET         /api/billing/invoices/{id}/
     POST        /api/billing/invoices/{id}/confirm/
     POST        /api/billing/invoices/{id}/cancel/
+    POST        /api/billing/invoices/{id}/send/
+    GET         /api/billing/invoices/{id}/print/
     POST        /api/billing/invoices/generate/
     GET, POST   /api/billing/payments/
     GET         /api/billing/payments/{id}/
@@ -24,7 +26,11 @@ from decimal import Decimal
 
 from django.apps import apps
 from django.db.models import Count, F, Q, Sum
+from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
 from django.utils import timezone
+from django.core.mail import send_mail
+from django.template.response import TemplateResponse
 from rest_framework import generics, status, views
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -36,6 +42,7 @@ from accounts.permissions import (
 )
 from billing.models import Discount, Invoice, Payment
 from billing.permissions import (
+    IsApplicationCustomer,
     IsApplicationStaffOrAdmin,
     IsInvoiceCustomerOrStaff,
 )
@@ -161,6 +168,49 @@ class InvoiceCancelView(views.APIView):
             return Response(e.message_dict if hasattr(e, "message_dict") else {"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(InvoiceDetailSerializer(invoice).data)
+
+
+class InvoiceSendView(views.APIView):
+    """Email a confirmed or paid invoice to its customer."""
+
+    permission_classes = [IsApplicationStaffOrAdmin]
+
+    def post(self, request, pk):
+        invoice = get_object_or_404(
+            Invoice.objects.select_related("customer", "subscription"), pk=pk
+        )
+        if invoice.status not in (Invoice.Status.CONFIRMED, Invoice.Status.PAID):
+            return Response(
+                {"detail": "Only confirmed or paid invoices can be sent."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        send_mail(
+            subject=f"Invoice {invoice.invoice_number}",
+            message=render_to_string("billing/invoice_email.txt", {"invoice": invoice}),
+            from_email=None,
+            recipient_list=[invoice.customer.email],
+            fail_silently=False,
+        )
+        return Response(
+            {"detail": "Invoice email sent.", "invoice_number": invoice.invoice_number},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class InvoicePrintView(views.APIView):
+    """Render a print-ready invoice that its customer or staff may view."""
+
+    permission_classes = [IsInvoiceCustomerOrStaff]
+
+    def get(self, request, pk):
+        queryset = Invoice.objects.select_related("customer", "subscription", "discount").prefetch_related(
+            "lines__product", "lines__product_variant", "lines__tax_rule"
+        )
+        if request.user.role == "customer":
+            queryset = queryset.filter(customer=request.user)
+        invoice = get_object_or_404(queryset, pk=pk)
+        return TemplateResponse(request, "billing/invoice_print.html", {"invoice": invoice})
 
 
 class InvoiceBulkGenerateView(views.APIView):
@@ -309,8 +359,7 @@ class DiscountDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class DashboardSummaryView(views.APIView):
     """
-    Single-query DB aggregation designed for <2 second response.
-    Provides verified metrics for Sreehari's dashboard integration:
+    Provides dashboard metrics for Srihari's dashboard integration:
     - active_subscriptions
     - billed_revenue (confirmed + paid invoices, excluding cancelled)
     - payments_collected (total money received)
@@ -408,7 +457,7 @@ class CustomerInvoiceListView(CustomerScopedQuerysetMixin, generics.ListAPIView)
     Uses CustomerScopedQuerysetMixin with customer_owner_field='customer_id'.
     """
 
-    permission_classes = [IsInvoiceCustomerOrStaff]
+    permission_classes = [IsApplicationCustomer]
     serializer_class = InvoiceListSerializer
     queryset = Invoice.objects.select_related("customer", "subscription", "discount").all()
     customer_owner_field = "customer_id"
@@ -421,7 +470,7 @@ class CustomerPaymentListView(CustomerScopedQuerysetMixin, generics.ListAPIView)
     Uses CustomerScopedQuerysetMixin with customer_owner_field='invoice__customer_id'.
     """
 
-    permission_classes = [IsInvoiceCustomerOrStaff]
+    permission_classes = [IsApplicationCustomer]
     serializer_class = PaymentSerializer
     queryset = Payment.objects.select_related("invoice", "recorded_by").all()
     customer_owner_field = "invoice__customer_id"
