@@ -16,7 +16,7 @@ This contribution owns the dashboard and customer-facing portal pages. Arjun own
 
 The checkout originally held a standalone React/Vite prototype in `dashboard-portal/` and the user-edited `dashboard-portal/PROGRESS_REPORT.md`. It did not use the team's intended Django templates/session architecture. Those files were preserved and are still untracked; they are not part of the new Django implementation. The report at `dashboard-portal/PROGRESS_REPORT.md` is retained as historical prototype notes and should not be treated as current status.
 
-I fetched the latest visible `origin/main` and fast-forwarded `feature/dashboard-portal` to the merged authentication foundation at `be770bbd7618de9198fb492e1a85051353b1e6ed`. A later remote refresh also found `origin/feat/billing` at `a13cafd` and its `docs/BILLING_INTEGRATION.md`. Existing prototype/report changes were stashed before updating and then restored. Neither the billing branch nor its code has been merged into this feature branch; it is used as the documented integration target only.
+I fetched the latest visible `origin/main` and fast-forwarded `feature/dashboard-portal` to the merged authentication foundation at `be770bbd7618de9198fb492e1a85051353b1e6ed`. The latest refresh found `origin/feat/billing` at `3a7660b`; that commit only adds final newlines to six billing test-fixture files. No remote `products`, `subscriptions`, or integration branch is present. PR #2 remains a draft and documents that billing has no production product/subscription models or migrations. Neither billing nor its code has been merged into this feature branch.
 
 ## 3. Actual files and their purpose
 
@@ -36,7 +36,7 @@ dashboard/
     dashboard.css                        Responsive page and table styling
     dashboard.js                         Shared session check, billing API requests,
                                           demo fallback, states, filters and pagination
-PROJECT_REPORT.md                         This current progress report
+DASHBOARD_PORTAL_REPORT.md                This dashboard and portal report
 ```
 
 The merged shared foundation used by these pages includes `accounts/static/accounts/auth-client.js` and `docs/AUTHENTICATION.md`. The dashboard JavaScript imports `currentUser`, `ApiError`, and `logout` from that existing helper. It does not create another login mechanism, store credentials in local storage, or bypass same-origin cookies/CSRF. The views use Django `login_required`; authorization is checked against `request.user.role` on the server before rendering.
@@ -63,7 +63,7 @@ Those APIs are not on `main` and `billing` is not enabled in default settings. W
 
 Adwaith's fetched `docs/BILLING_INTEGRATION.md` gives a concrete dashboard response and these metric definitions. The JavaScript displays those server-calculated totals without recalculating them. The API/contract still has to be merged and confirmed against Haridev's real subscription models.
 
-| Card | Proposed definition to confirm |
+| Card | Definition in the fetched branch contract (still awaiting production integration) |
 |---|---|
 | Active subscriptions | Global count whose status is `active` (not a selected-period count). |
 | Billed revenue | Global sum of `confirmed` and `paid` invoice totals; excludes drafts and cancelled invoices. |
@@ -85,32 +85,32 @@ Automated page tests in `dashboard/tests.py` cover anonymous redirects, role bou
 
 | Requested check | Current evidence |
 |---|---|
-| Route and role behavior | `dashboard.tests.DashboardPageTests`: redirects, admin/customer/staff boundaries, demo/production templates, GET-only, and `Cache-Control: no-store`; included in the 57 passing tests. |
-| Shared auth helper and session | Page JS uses existing `currentUser`, `apiRequest`, and `logout`; HTTP smoke confirmed anonymous dashboard/portal requests redirect to `/login/`. Authenticated browser behavior was not visually checked. |
-| Filters/pagination/loading/error/empty states | UI calls the billing summary and invoice list APIs with the documented filters; portal calls both `/my/` APIs. Local pagination and loading/error/retry/empty/session states are implemented. Browser/API interaction was not verified. Subscription list and server-side pagination remain unavailable. |
+| Route and role behavior | `dashboard.tests.DashboardPageTests` covers redirects, admin/customer/staff boundaries, demo/production templates, GET-only, and `Cache-Control: no-store`. The complete 57-test suite passed in the earlier clean run. A repeat after browser checks hit stale test-database data; a fresh run then failed during database setup with `relation "accounts_user" does not exist`. Treat the repeat as blocked by local test-database state, not as a passing verification. |
+| Shared auth helper and session | Page JS uses existing `currentUser`, `apiRequest`, and `logout`; HTTP smoke confirmed anonymous dashboard/portal requests redirect to `/login/`. An authenticated local browser session displayed the DEBUG dashboard. The backend APIs were unavailable, so this verified the labeled demo fallback only. |
+| Filters/pagination/loading/error/empty states | UI calls the billing summary and invoice list APIs with the documented filters; portal calls both `/my/` APIs. Local pagination and loading/error/retry/empty/session states are implemented. Browser interaction verified the demo overdue status filter reduces the invoice table to its overdue sample record. Live API behavior was not verified. Subscription list and server-side pagination remain unavailable. |
 | Partial/cancelled invoice reconciliation | The fetched billing branch contains a summary test with a $50 partial payment, a cancelled $999 invoice excluded, and expected billed $330, collected $50, outstanding $280, overdue 2. This is useful fixture evidence from the teammate branch, not a test run or known-data reconciliation on this dashboard branch. |
 | Customer A vs Customer B isolation | The fetched billing branch includes API tests asserting customer A cannot see customer B invoices/payments. The portal uses those customer-only endpoints without submitting a customer ID. Tests were not run here; live isolation is not yet independently verified. |
-| Browser/responsive checks | HTTP smoke returned 302 for protected dashboard/portal pages, 200 for `/login/`, CSS and JS assets. Computer Use browser capture failed twice (`FrameArrived timed out`, then `window capture timed out`); no screenshot or visual responsive check is claimed. |
+| Browser/responsive checks | HTTP smoke returned 302 for protected dashboard/portal pages, 200 for `/login/`, CSS and JS assets. Desktop browser check confirmed the DEBUG banner, summary cards, sample invoice table and overdue filter. No mobile viewport check or screenshot was saved. |
 | Performance with thousands of subscriptions | Not measured. Current demo list is small and uses client-side pagination; this cannot stand in for an API/database benchmark. |
 | Secret and unrelated-file review | Staged changes contain only dashboard/report/settings files; common credential-pattern scan and `git diff --cached --check` passed. The preserved React prototype/report remain unstaged. |
-| Syntax/whitespace checks | Python source compilation, `node --check`, and `git diff --check` passed. Django system check and 57 tests passed. |
+| Syntax/whitespace checks | Python source compilation, `node --check`, `git diff --check`, and Django system check passed. The full test suite passed once before browser fixtures were added to the retained test database; subsequent reruns are blocked by test-database setup/state as described above. |
 
 ## 8. Next integration steps / blockers
 
-1. Haridev publishes/confirms production subscription list and customer subscription endpoints, statuses, fields, pagination, and permitted actions. The billing branch's production migration dependencies are explicitly pending those models.
-2. Merge/integrate Adwaith's `feat/billing` branch and its dependencies into the team integration branch; billing endpoints are conditional and absent from current `main`.
-3. Confirm pagination and currency with Adwaith. The current billing contract has no server pagination or currency field; this UI currently paginates returned records locally and formats decimal values without a symbol.
-4. Run the billing branch's isolated tests after its APIs are merged; compare dashboard-rendered values to its partial/cancelled fixtures and real known invoice/payment records.
-5. Browser-check role navigation, filter submission/reset, tabs, pagination, session expiry, narrow layout, and accessible status/empty feedback. Capture screenshots.
-6. Benchmark the actual API/page with a documented environment and at least thousands of records; report dataset and timings. Do not infer API performance from the current demo fixture.
-7. Commit and publish this branch and open a draft PR while subscription-model integration is blocked. Never push to `main`, force-push, or merge automatically.
+1. **Haridev:** publish the real product/plan/subscription models and migrations, staff and customer subscription-list endpoints with response examples, exact status/date/renewal fields, pagination, and allowed actions. No such remote branch or API is currently visible.
+2. **Adwaith:** confirm the dashboard report rename, and document server-side invoice pagination (query parameters and response shape) and the billing currency/code/precision. The current PR #2 contract has no currency or server-side pagination. A coordination comment could not be submitted because PR #2's comment controls were disabled in this session.
+3. **Arjun:** identify or create the agreed integration branch and coordinate landing authentication, Haridev's models, and Adwaith's billing APIs/migrations together. Current `origin` has no integration branch, and billing is not enabled in `main`.
+4. After those dependencies land, connect the subscription tables/actions to their real endpoints, switch the invoice table to server-side pagination, and run the relevant integrated tests against real models and migrations.
+5. Verify known invoice/payment totals, partial/full/cancelled/overdue cases, and customer A/B access on the combined backend.
+6. Run desktop/mobile browser checks, capture screenshots, and benchmark the real APIs/page with thousands of records. Do not infer performance from the small development fixture.
+7. Keep PR #3 in draft until these integration and verification items pass; never push to `main`, force-push, or merge automatically.
 
 ## 9. Commit and remote publication status
 
-The latest remote information was fetched and `feature/dashboard-portal` was fast-forwarded to the verified `origin/main` auth foundation. A subsequent fetch found `origin/feat/billing` at `a13cafd`; that feature branch was inspected but not merged. Commits `1a07ba4` (Django dashboard/portal pages) and `b316be3` (billing API wiring, staff-role correction, and contract/report updates) are pushed to `origin/feature/dashboard-portal`. The earlier React prototype and user-edited prototype report remain untracked and unstaged.
+The latest remote information was fetched: `origin/main` remains at the auth foundation and `origin/feat/billing` is `3a7660b`. Dashboard commits `1a07ba4` and `b316be3`, followed by report updates `9f397ec` and `c272eba`, are pushed to `origin/feature/dashboard-portal`. This follow-up renames the dashboard report to `DASHBOARD_PORTAL_REPORT.md` so it does not collide with the billing branch's root `PROJECT_REPORT.md`. The earlier React prototype/report remain preserved, untracked, and unstaged.
 
-The final staged-diff review found no common private-key, API-key, password, or configured Django-secret patterns; syntax and whitespace checks passed. Pull request [#3](https://github.com/Arjunb32/-Subscription_Management_System/pull/3) is open as a draft, from `feature/dashboard-portal` into `main`, with three commits and no merge conflicts. It has no CI checks yet and its description is blank. The draft state should remain until Haridev's subscription API and billing dependencies are integrated. No push authentication failure occurred.
+The staged-diff review found no common private-key, API-key, password, or configured Django-secret patterns; `git diff --cached --check` passed. The local follow-up commit renames the dashboard report to `DASHBOARD_PORTAL_REPORT.md` so it does not collide with the billing branch's root `PROJECT_REPORT.md`. Pull request [#3](https://github.com/Arjunb32/-Subscription_Management_System/pull/3) remains a draft from `feature/dashboard-portal` into `main`; the last page check showed no conflicts and no CI checks. The follow-up commit was created locally, but its push failed with Git for Windows `SEC_E_NO_CREDENTIALS`; the rename and demo-filter fix are not yet on GitHub. The PR description was updated to summarize the already-published implementation, verification limits, blockers, and the local follow-up awaiting publication. Keep it draft until Haridev's subscription API and billing dependencies are integrated.
 
 ## 10. Current dashboard and interface (visual summary)
 
-The Django dashboard presents five server-calculated billing summary cards, invoice issue-date/due-date/customer/status filters, an invoice table, and a subscriptions table awaiting Haridev's API. The customer portal reads invoices and payments from the billing branch's customer-scoped APIs and awaits Haridev's subscription endpoint. Both pages include shared session navigation, responsive styling, loading/error/retry/empty/session states, and role-specific server routes. In DEBUG, only, unavailable APIs use clearly labeled fixture data. End-to-end behavior, browser checks, and performance remain unverified.
+The Django dashboard presents five server-calculated billing summary cards, invoice issue-date/due-date/customer/status filters, an invoice table, and a subscriptions table awaiting Haridev's API. The customer portal reads invoices and payments from the billing branch's customer-scoped APIs and awaits Haridev's subscription endpoint. Both pages include shared session navigation, responsive styling, loading/error/retry/empty/session states, and role-specific server routes. In DEBUG, unavailable APIs use clearly labeled fixture data. Desktop browser interaction of the DEBUG fallback was checked; real backend behavior, mobile layout, and performance remain unverified.

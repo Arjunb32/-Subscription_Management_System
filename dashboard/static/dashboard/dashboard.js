@@ -61,6 +61,7 @@ if (root) {
   }
   function showDemoBanner(show) { hide('demo-banner', !show); }
   function renderDemoDashboard() {
+    fillCustomerOptions(demoInvoices);
     const from = $('filter-from').value; const to = $('filter-to').value;
     const customer = $('filter-customer').value; const status = $('filter-status').value;
     const subs = subscriptions.filter((r) => (!from || r.started >= from) && (!to || r.started <= to));
