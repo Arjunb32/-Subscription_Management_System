@@ -1,0 +1,25 @@
+{% extends 'accounts/base.html' %}
+{% block title %}Your account{% endblock %}
+{% block content %}
+<p class="eyebrow">YOUR ACCOUNT</p>
+<h1 id="page-title">You're signed in</h1>
+<p class="intro">Your account details and access.</p>
+<dl class="account-details">
+  <dt>Email address</dt><dd id="account-email">Loading…</dd>
+  <dt>Role</dt><dd><span id="account-role" class="badge">Loading…</span></dd>
+</dl>
+<button id="logout" type="button" class="secondary">Sign out</button>
+<section id="staff-section" class="staff-section" hidden>
+  <h2>Create a staff account</h2>
+  <p class="help">Give a team member staff access.</p>
+  <form id="staff-form">
+    {% csrf_token %}
+    <label for="staff-email">Staff email address</label>
+    <input id="staff-email" name="email" type="email" autocomplete="off" maxlength="254" required>
+    <label for="staff-password">Initial password</label>
+    <input id="staff-password" name="password" type="password" autocomplete="new-password" minlength="9" maxlength="1024" aria-describedby="staff-help" required>
+    <p id="staff-help" class="help">At least 9 characters with uppercase, lowercase and a special character.</p>
+    <button type="submit">Create staff account</button>
+  </form>
+</section>
+{% endblock %}
