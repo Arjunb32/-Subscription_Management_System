@@ -1,0 +1,38 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Customer portal{% endblock %}
+{% block content %}
+<main class="page-shell" data-feature-page="portal" data-subscriptions-url="/api/my/subscriptions/" data-invoices-url="/api/billing/my/invoices/" data-payments-url="/api/billing/my/payments/">
+  <div class="page-heading"><div><p class="eyebrow">CUSTOMER ACCOUNT</p><h1>My billing</h1><p class="subheading">Review your subscriptions, invoices, and payments.</p></div></div>
+  <section id="session-message" class="notice notice-warning" role="status" aria-live="polite" hidden></section>
+  <section id="loading-state" class="loading-state" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>Loading your account…</section>
+  <section id="integration-state" class="notice notice-info" role="status" hidden></section>
+  <section id="error-state" class="notice notice-error" role="alert" hidden><span id="error-message"></span><button id="retry-button" class="text-button" type="button">Try again</button></section>
+  <section id="portal-content" class="panel portal-panel" hidden>
+    <div class="portal-customer-head"><div class="customer-avatar" aria-hidden="true">SC</div><div><h2 id="portal-customer-name">Your account</h2><p id="portal-customer-email"></p></div></div>
+    <div class="portal-tabs" role="tablist" aria-label="Billing sections">
+      <button type="button" role="tab" id="tab-subscriptions" aria-selected="true" aria-controls="portal-panel-subscriptions">Subscriptions</button>
+      <button type="button" role="tab" id="tab-invoices" aria-selected="false" aria-controls="portal-panel-invoices">Invoices</button>
+      <button type="button" role="tab" id="tab-payments" aria-selected="false" aria-controls="portal-panel-payments">Payments</button>
+    </div>
+    <section id="portal-panel-subscriptions" class="portal-tab-panel" role="tabpanel" aria-labelledby="tab-subscriptions">
+      <div class="panel-heading"><div><h3>Your subscriptions</h3><p>Actions are available only when your agreed plan permits them. Prices are INR per service period before discounts.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Plan</th><th>Status</th><th>Started</th><th>Period ends / billing due</th><th>Price</th><th>Actions</th></tr></thead><tbody id="portal-subscriptions-body"></tbody></table></div>
+      <div id="portal-subscriptions-empty" class="empty-state" hidden>No subscriptions to show.</div>
+      <div id="portal-subscriptions-integration" class="notice notice-info" hidden>Subscription service is unavailable.</div>
+    <div class="table-footer"><span id="portal-subscriptions-page-label"></span><div class="pagination"><button id="portal-subscriptions-prev" type="button">Previous</button><button id="portal-subscriptions-next" type="button">Next</button></div></div>
+    </section>
+    <section id="portal-panel-invoices" class="portal-tab-panel" role="tabpanel" aria-labelledby="tab-invoices" hidden>
+      <div class="panel-heading"><div><h3>Invoices</h3><p>Your invoices and their current balances (INR).</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Invoice</th><th>Date</th><th>Total</th><th>Paid</th><th>Remaining</th><th>Status</th></tr></thead><tbody id="portal-invoices-body"></tbody></table></div>
+      <div id="portal-invoices-empty" class="empty-state" hidden>No invoices to show.</div>
+    <div class="table-footer"><span id="portal-invoices-page-label"></span><div class="pagination"><button id="portal-invoices-prev" type="button">Previous</button><button id="portal-invoices-next" type="button">Next</button></div></div>
+    </section>
+    <section id="portal-panel-payments" class="portal-tab-panel" role="tabpanel" aria-labelledby="tab-payments" hidden>
+      <div class="panel-heading"><div><h3>Payments</h3><p>Payment history returned for your account.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Payment</th><th>Date</th><th>Invoice</th><th>Amount</th><th>Method</th></tr></thead><tbody id="portal-payments-body"></tbody></table></div>
+      <div id="portal-payments-empty" class="empty-state" hidden>No payments to show.</div>
+    <div class="table-footer"><span id="portal-payments-page-label"></span><div class="pagination"><button id="portal-payments-prev" type="button">Previous</button><button id="portal-payments-next" type="button">Next</button></div></div>
+    </section>
+  </section>
+</main>
+{% endblock %}

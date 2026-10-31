@@ -1,5 +1,11 @@
 # Subscription Management System: four-person hackathon plan
 
+## Current responsibility update — 31 October 2026
+
+Arjun has taken over Haridev's complete products, plans, quotation templates and subscriptions section because Haridev currently has no electricity or internet access. This includes its backend, migrations, APIs, management screens and lifecycle rules. Arjun retains authentication, shared setup and integration. Adwaith retains billing/payments; Sreehari retains dashboard/customer portal. Work must proceed without waiting for Haridev. Preserve and inspect any of his code that later becomes available before incorporating it.
+
+The timetable below is the original planning baseline, not a current progress report. Use [the takeover implementation prompt](docs/PRODUCTS_SUBSCRIPTIONS_TAKEOVER_PROMPT.md) for the current implementation sequence and integration requirements.
+
 ## Basis and assumptions
 
 Based on the supplied Subscription_Management_System.pdf, pages 1–4. The linked Drive video could not be accessed; additional judging criteria or submission rules from that video remain unverified. Document requirements below are product requirements, not instructions authorizing external actions.
@@ -15,13 +21,13 @@ A platform for Brightloop Software to configure products and recurring plans, se
 | Owner | Feature area and screens | Server/data responsibility | Completion evidence |
 |---|---|---|---|
 | Arjun — access and integration lead | Sign up, login, password reset, staff management, shared navigation | Users, roles, ownership checks, environment setup, shared API conventions, integration and deployment | Admin can create staff; staff/customer cannot; customer A cannot read customer B's data; reset token expires and is single use |
-| Haridev — catalog and subscription lead | Products, variants, plans, quotation templates, subscription list/detail/editor | Products, plans, template lines, subscription lines and lifecycle, renewal/pause/close policy | Create a quote from a template and progress Draft → Quotation → Confirmed → Active → Closed; enforce plan rules |
+| Arjun — catalog and subscriptions (taken over from Haridev) | Products, variants, plans, quotation templates, subscription list/detail/editor | Products, plans, template lines, subscription lines and lifecycle, renewal/pause/close policy | Create a quote from a template and progress Draft → Quotation → Confirmed → Active → Closed; enforce plan rules |
 | Adwaith — billing and payments lead | Invoice list/detail, tax and discount settings, payment entry, printable invoice | Recurring invoice generation, tax/discount calculation, payment allocation, duplicate prevention | Generate a correct invoice, rerun billing without duplicates, record a payment, update outstanding balance |
 | Sreehari — portal, reporting and quality lead | Customer portal, dashboard, filters and summary views | Reporting queries and customer-facing read endpoints, seed/demo data, end-to-end checks and presentation | Portal shows only the signed-in customer's subscriptions/invoices; dashboard matches invoice and payment records |
 
 Each person owns both UI and server work for their feature area. Arjun coordinates merges, but reviews rotate so that integration does not depend on one person. Sreehari starts immediately using agreed sample responses; they do not wait until the end to begin testing.
 
-Shared-file owners: Arjun owns application setup, auth middleware and navigation; Haridev owns the initial schema; Adwaith owns money calculation helpers; Sreehari owns seed data and demo scripts. Later schema changes use separate migrations, reviewed with the affected feature owner. Tell the owner before changing a shared file.
+Shared-file owners: Arjun owns application setup, auth middleware, navigation and the products/subscriptions schema; Adwaith owns money calculation helpers; Sreehari owns seed data and demo scripts. Later schema changes use separate migrations, reviewed with the affected feature owner. Tell the owner before changing a shared file.
 
 ## Requirements checklist
 
@@ -33,7 +39,7 @@ Shared-file owners: Arjun owns application setup, auth middleware and navigation
 - Admin, staff and customer access. Only admin adds staff. Explicit staff permission matrix agreed in hour 1.
 - Check authentication, role and record ownership on every protected endpoint.
 
-### Products, plans and subscriptions — Haridev
+### Products, plans and subscriptions — Arjun (formerly Haridev)
 
 - Product name, type, sales price, cost price and notes; variants with additional prices. Include the PDF's Odoo variant example (+560) in demo data.
 - Plan price, daily/weekly/monthly/yearly recurrence, minimum quantity and availability dates.
@@ -98,7 +104,7 @@ The complete brief is ambitious for four beginners in eight hours. Aim for a rel
 ### First deliverable for each person
 
 - Arjun: working login, three roles, shared navigation and server-side access checks. Coordinate merges with a teammate; do not try to review every change alone.
-- Haridev: create a product and monthly plan, then create and activate a subscription linked to a customer.
+- Arjun, additional responsibility: create a product and monthly plan, then create and activate a subscription linked to a customer.
 - Adwaith: generate a persisted invoice from that subscription, prevent duplicate generation for its period, and record payment against it.
 - Sreehari: show active subscriptions, collected payments, outstanding balance and overdue invoices from real data, plus a customer-only view.
 

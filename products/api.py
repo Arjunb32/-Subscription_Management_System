@@ -53,7 +53,7 @@ class VariantViewSet(ManagedViewSet):
         qs = super().get_queryset()
         product = self.request.query_params.get("product")
         if product:
-            if not product.isdecimal():
+            if not product.isdecimal() or len(product) > 18:
                 raise serializers.ValidationError({"product": "Use an integer ID."})
             qs = qs.filter(product_id=product)
         return qs

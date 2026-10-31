@@ -109,3 +109,14 @@ verification record. The untracked project plan and Word report remain excluded.
 The 16 HTTP checks are previously recorded results and were not rerun for this
 publication. Browser interaction checks and live SMTP delivery remain incomplete;
 this foundation is not presented as production-ready.
+
+
+## Products/subscriptions integration ? 31 October 2026
+
+The foundation-only limits above are historical. The local integrated
+implementation now has **127 passing PostgreSQL tests**, real production
+migrations, additive working DB upgrade, reproducible two-customer HTTP demo
+and a 5,000-subscription backend benchmark. See
+[INTEGRATION_VERIFICATION.md](INTEGRATION_VERIFICATION.md) for exact checks,
+timings and limitations. Browser interaction remains blocked by Computer Use's
+current-URL policy host; no browser or live inbox/scheduler pass is claimed.

@@ -31,7 +31,7 @@ if "*" in ALLOWED_HOSTS:
 
 INSTALLED_APPS = [
     "django.contrib.auth", "django.contrib.contenttypes", "django.contrib.sessions",
-    "django.contrib.staticfiles", "rest_framework", "accounts", "products", "subscriptions",
+    "django.contrib.staticfiles", "rest_framework", "accounts", "products", "subscriptions", "billing", "dashboard",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

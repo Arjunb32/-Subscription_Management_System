@@ -1,0 +1,12 @@
+Invoice {{ invoice.invoice_number }}
+
+Dear {{ invoice.customer.email }},
+
+Issue date: {{ invoice.issue_date }}
+Due date: {{ invoice.due_date }}
+Total: {{ invoice.total }}
+Paid: {{ invoice.amount_paid }}
+Amount due: {{ invoice.amount_due }}
+Status: {{ invoice.get_status_display }}
+
+Please contact us if you have any questions about this invoice.

@@ -30,6 +30,7 @@ class TaxSerializer(StrictModelSerializer):
 
 
 class LineInput(StrictModelSerializer):
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"), default=Decimal("1.00"))
     base_unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0, required=False, write_only=True)
     unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     amount = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
@@ -41,6 +42,9 @@ class LineInput(StrictModelSerializer):
         read_only_fields = ["id", "tax_rate", "description"]
 
     def validate(self, attrs):
+        if "product" not in attrs:
+            raise serializers.ValidationError({"product": "A product is required for each replacement line."})
+        attrs.setdefault("quantity", Decimal("1.00"))
         try:
             snapshot_line(attrs)
         except Exception as exc:
@@ -49,7 +53,7 @@ class LineInput(StrictModelSerializer):
 
 
 class TemplateSerializer(StrictModelSerializer):
-    lines = LineInput(many=True)
+    lines = LineInput(many=True, max_length=100)
     plan_name = serializers.CharField(source="plan.name", read_only=True)
 
     class Meta:
@@ -130,7 +134,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Subscription
-        fields = ["id", "subscription_number", "customer", "customer_email", "customer_display", "plan", "plan_name", "status", "start_date", "expiry_date", "current_period_start", "current_period_end", "renewal_date", "payment_terms_days", "quotation_valid_until", "plan_price", "billing_interval", "currency", "subtotal", "price", "permitted_actions", "lines"]
+        fields = ["id", "subscription_number", "customer", "customer_email", "customer_display", "plan", "plan_name", "template", "status", "start_date", "expiry_date", "current_period_start", "current_period_end", "renewal_date", "payment_terms_days", "validity_days", "quotation_valid_until", "plan_price", "billing_interval", "paused_on", "pause_reason", "currency", "subtotal", "price", "permitted_actions", "lines"]
 
     def get_customer_display(self, obj):
         return obj.customer.get_full_name() or obj.customer.email

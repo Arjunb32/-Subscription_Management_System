@@ -1,0 +1,27 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="same-origin">
+  <title>{% block title %}Workspace{% endblock %} · Subscription Management</title>
+  <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+</head>
+<body data-page="{{ page }}" data-demo-mode="{{ demo_mode|yesno:'true,false' }}">
+  <header class="site-header">
+    <a class="brand" href="{% url 'account-page' %}"><span class="brand-mark" aria-hidden="true">S</span> Subscription Management</a>
+    <nav class="site-nav" aria-label="Main navigation">
+      {% if request.user.role == 'admin' or request.user.role == 'staff' %}<a {% if page == 'overview' %}aria-current="page"{% endif %} href="{% url 'dashboard-overview' %}">Dashboard</a>{% endif %}
+      {% if request.user.role == 'customer' %}<a {% if page == 'portal' %}aria-current="page"{% endif %} href="{% url 'customer-portal' %}">My portal</a>{% endif %}
+      {% if request.user.role != 'customer' %}<a href="/manage/">Manage</a>{% endif %}<a href="{% url 'account-page' %}">Account</a>
+    </nav>
+    <div class="user-menu"><span id="signed-in-user">{{ request.user.email }}</span><button id="sign-out" class="quiet-button" type="button">Sign out</button></div>
+  </header>
+  <main id="main-content">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer"><span>Subscription Management</span><span>Same-origin session protected</span></footer>
+  <script type="module" src="{% static 'dashboard/dashboard.js' %}"></script>
+</body>
+</html>

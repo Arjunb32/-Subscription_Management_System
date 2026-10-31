@@ -62,7 +62,7 @@ def start():
     import psycopg
     from psycopg import sql
     with psycopg.connect(dbname="postgres", **settings, autocommit=True) as conn:
-        for name in ["test_subscription_management", "test_auth_http"]:
+        for name in ["test_subscription_management", "test_auth_http", "test_subscription_demo", "test_subscription_perf"]:
             if not conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,)).fetchone():
                 conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
     print(f"Isolated test PostgreSQL ready on 127.0.0.1:{PORT}; working database untouched.")

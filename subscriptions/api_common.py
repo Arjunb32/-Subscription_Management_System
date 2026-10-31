@@ -33,6 +33,17 @@ class ManagedViewSet(ModelViewSet):
     permission_classes = [StaffPermission]
     pagination_class = Pagination
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        fields = {field.name for field in qs.model._meta.fields}
+        search = self.request.query_params.get("search")
+        if search and "name" in fields:
+            qs = qs.filter(name__icontains=search[:255])
+        active = self.request.query_params.get("is_active")
+        if "is_active" in fields and active in ("true", "false"):
+            qs = qs.filter(is_active=active == "true")
+        return qs
+
     def perform_destroy(self, instance):
         try:
             instance.delete()

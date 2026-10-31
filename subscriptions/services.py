@@ -53,6 +53,8 @@ def validate_ready(sub, *, check_catalog=True):
         raise ValidationError({"lines": "Exactly one snapshotted plan fee is required."})
     for line in lines:
         line.full_clean()
+    if sum((line.amount + line.tax_amount for line in lines), Decimal(0)) > Decimal("99999999.99"):
+        raise ValidationError({"lines": "Per-period total exceeds the supported INR 99,999,999.99 limit."})
     if check_catalog:
         plan = sub.plan
         if not plan.is_active or (plan.available_from and sub.start_date < plan.available_from) or (plan.available_until and sub.start_date > plan.available_until):
@@ -100,6 +102,8 @@ def save_subscription(data, *, instance=None):
         setattr(sub, key, value)
     if not sub.plan_id:
         raise ValidationError({"plan": "A plan or template is required."})
+    if not sub.customer_id or sub.customer.role != "customer" or not sub.customer.is_active:
+        raise ValidationError({"customer": "Choose an active customer account."})
     refresh_plan_snapshot(sub)
     if not sub.plan.is_active:
         raise ValidationError({"plan": "Plan is archived."})
@@ -196,9 +200,16 @@ def transition(subscription_id, action, user, *, today=None):
         duration = today - sub.paused_on
         if duration.days < 0:
             raise ValidationError({"detail": "Resume cannot precede pause."})
+        future_periods = 0
+        boundary = sub.current_period_end
+        while sub.expiry_date and boundary < sub.expiry_date:
+            boundary = add_interval(boundary, sub.billing_interval)
+            future_periods += 1
         sub.current_period_end += duration
         if sub.expiry_date:
-            sub.expiry_date += duration
+            sub.expiry_date = sub.current_period_end
+            for _ in range(future_periods):
+                sub.expiry_date = add_interval(sub.expiry_date, sub.billing_interval)
         sub.status, sub.paused_on, sub.pause_reason = "active", None, ""
     elif action == "renew":
         if sub.status == "active":

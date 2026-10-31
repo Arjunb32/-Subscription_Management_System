@@ -95,11 +95,23 @@ async function edit(record=null) {
     editingId=record?.id||null;$('fields').replaceChildren();$('lines').replaceChildren();
     $('editor-title').textContent=`${record?'Edit draft / record':'Create'} · ${section}`;
     const values={...defaults,...record};
-    if(section==='subscriptions'&&record)values.validity_days=14;
     for(const definition of definitions[section]||[])$('fields').append(await makeField(definition,values[definition[0]]));
     const hasLines=['quotation-templates','subscriptions'].includes(section);
     $('line-section').hidden=!hasLines;
     if(hasLines)for(const line of record?.lines?.filter(row=>!row.is_plan_fee)||[{}])await addLine(line);
+    if(section==='subscriptions') {
+      const template=$('fields').querySelector('[name=template]');
+      const applyTemplate=async()=>{
+        const selected=Boolean(template.value);
+        $('line-section').hidden=selected;
+        $('line-section').querySelectorAll('input,select,textarea,button').forEach(input=>{input.disabled=selected;});
+        if(selected) {
+          try {const chosen=await apiRequest(`${endpoints['quotation-templates']}${template.value}/`);$('fields').querySelector('[name=plan]').value=chosen.plan;$('fields').querySelector('[name=validity_days]').value=chosen.validity_days;}
+          catch(error){message(errorMessage(error),true);}
+        }
+      };
+      template.addEventListener('change',applyTemplate);await applyTemplate();
+    }
     $('form-note').textContent=section==='subscriptions'?'Save creates a draft. Issue quotation, confirm and activate using the detail actions. A template supplies its own product lines; leave the editor lines unused when selecting one. Only drafts can be edited.':section==='plans'?'The recurring fee is billed once in addition to product lines. Policies are snapshotted when the subscription draft is saved.':'';
     $('editor').hidden=false;$('editor').scrollIntoView({behavior:'smooth'});
   }catch(error){message(errorMessage(error),true);}
