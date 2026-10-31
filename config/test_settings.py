@@ -22,5 +22,16 @@ DATABASES["default"].update({
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 PASSWORD_RESET_URL = "http://testserver/reset-password"
 ALLOWED_HOSTS = ["testserver", "localhost", "127.0.0.1"]
-INSTALLED_APPS = [*INSTALLED_APPS, "accounts.tests.fixtures.apps.AuthTestFixturesConfig"]
-MIGRATION_MODULES = {"auth_testfixtures": None}
+INSTALLED_APPS = [
+    *INSTALLED_APPS,
+    "accounts.tests.fixtures.apps.AuthTestFixturesConfig",
+    "billing.tests.fixtures.products.apps.ProductsFixtureConfig",
+    "billing.tests.fixtures.subscriptions.apps.SubscriptionsFixtureConfig",
+    "billing",
+]
+MIGRATION_MODULES = {
+    "auth_testfixtures": None,
+    "products": None,
+    "subscriptions": None,
+    "billing": None,
+}

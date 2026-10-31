@@ -3,7 +3,6 @@ DRF serializers for the billing app.
 """
 
 from decimal import Decimal
-
 from rest_framework import serializers
 
 from billing.models import Discount, Invoice, InvoiceLine, Payment
@@ -40,9 +39,26 @@ class DiscountSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["times_used", "created_by", "created_at", "updated_at"]
 
+    def validate_value(self, value):
+        if value <= Decimal("0.00"):
+            raise serializers.ValidationError("Discount value must be greater than zero.")
+        return value
+
+    def validate(self, attrs):
+        discount_type = attrs.get("discount_type") or getattr(self.instance, "discount_type", None)
+        value = attrs.get("value") or getattr(self.instance, "value", None)
+        if discount_type == Discount.Type.PERCENTAGE and value and value > Decimal("100.00"):
+            raise serializers.ValidationError({"value": "Percentage discount cannot exceed 100%."})
+
+        start = attrs.get("start_date") or getattr(self.instance, "start_date", None)
+        end = attrs.get("end_date") or getattr(self.instance, "end_date", None)
+        if start and end and end < start:
+            raise serializers.ValidationError({"end_date": "End date cannot be earlier than start date."})
+        return attrs
+
 
 # ---------------------------------------------------------------------------
-# Invoice Line (nested)
+# Invoice Line
 # ---------------------------------------------------------------------------
 
 
@@ -65,11 +81,12 @@ class InvoiceLineSerializer(serializers.ModelSerializer):
             "unit_price",
             "tax_rule",
             "tax_rule_name",
+            "tax_rate",
             "tax_amount",
             "discount_amount",
             "line_total",
         ]
-        read_only_fields = ["tax_amount", "line_total"]
+        read_only_fields = ["tax_rate", "tax_amount", "line_total"]
 
     def get_variant_name(self, obj):
         return str(obj.product_variant) if obj.product_variant else None
@@ -84,12 +101,8 @@ class InvoiceLineSerializer(serializers.ModelSerializer):
 
 
 class InvoiceListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for list views."""
-
     customer_email = serializers.EmailField(source="customer.email", read_only=True)
-    amount_due = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True
-    )
+    amount_due = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -115,17 +128,11 @@ class InvoiceListSerializer(serializers.ModelSerializer):
 
 
 class InvoiceDetailSerializer(serializers.ModelSerializer):
-    """Full serializer with nested lines."""
-
     lines = InvoiceLineSerializer(many=True, read_only=True)
     customer_email = serializers.EmailField(source="customer.email", read_only=True)
-    amount_due = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True
-    )
+    amount_due = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
-    discount_name = serializers.CharField(
-        source="discount.name", read_only=True, default=None
-    )
+    discount_name = serializers.CharField(source="discount.name", read_only=True, default=None)
 
     class Meta:
         model = Invoice
@@ -166,33 +173,14 @@ class InvoiceDetailSerializer(serializers.ModelSerializer):
         ]
 
 
-class InvoiceCreateSerializer(serializers.ModelSerializer):
-    """For manual invoice creation (lines added separately)."""
-
-    class Meta:
-        model = Invoice
-        fields = [
-            "subscription",
-            "customer",
-            "due_date",
-            "period_start",
-            "period_end",
-            "notes",
-        ]
-
-
 # ---------------------------------------------------------------------------
 # Payment
 # ---------------------------------------------------------------------------
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    invoice_number = serializers.CharField(
-        source="invoice.invoice_number", read_only=True
-    )
-    recorded_by_email = serializers.EmailField(
-        source="recorded_by.email", read_only=True, default=None
-    )
+    invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
+    recorded_by_email = serializers.EmailField(source="recorded_by.email", read_only=True, default=None)
 
     class Meta:
         model = Payment
@@ -212,36 +200,38 @@ class PaymentSerializer(serializers.ModelSerializer):
         read_only_fields = ["recorded_by", "created_at"]
 
     def validate_amount(self, value):
-        if value <= Decimal("0"):
-            raise serializers.ValidationError("Payment amount must be positive.")
+        if value <= Decimal("0.00"):
+            raise serializers.ValidationError("Payment amount must be greater than zero.")
         return value
 
     def validate(self, attrs):
         invoice = attrs.get("invoice")
-        if invoice and invoice.status == Invoice.Status.CANCELLED:
-            raise serializers.ValidationError(
-                "Cannot record a payment on a cancelled invoice."
-            )
-        if invoice and invoice.status == Invoice.Status.DRAFT:
-            raise serializers.ValidationError(
-                "Confirm the invoice before recording payments."
-            )
+        amount = attrs.get("amount")
+        if invoice:
+            if invoice.status == Invoice.Status.CANCELLED:
+                raise serializers.ValidationError({"invoice": "Cannot record payment on a cancelled invoice."})
+            if invoice.status == Invoice.Status.DRAFT:
+                raise serializers.ValidationError({"invoice": "Confirm the invoice before recording payment."})
+            if amount:
+                remaining = invoice.total - invoice.amount_paid
+                if amount > remaining:
+                    raise serializers.ValidationError({
+                        "amount": f"Payment amount ({amount}) exceeds remaining balance ({remaining})."
+                    })
         return attrs
 
 
 # ---------------------------------------------------------------------------
-# Dashboard / Summary
+# Dashboard Summary
 # ---------------------------------------------------------------------------
 
 
 class DashboardSummarySerializer(serializers.Serializer):
-    """Read-only summary for the finance dashboard endpoint."""
-
     active_subscriptions = serializers.IntegerField()
-    total_revenue = serializers.DecimalField(max_digits=14, decimal_places=2)
+    billed_revenue = serializers.DecimalField(max_digits=14, decimal_places=2)
+    payments_collected = serializers.DecimalField(max_digits=14, decimal_places=2)
     total_outstanding = serializers.DecimalField(max_digits=14, decimal_places=2)
     overdue_invoices = serializers.IntegerField()
     invoices_by_status = serializers.DictField(child=serializers.IntegerField())
     revenue_this_month = serializers.DecimalField(max_digits=14, decimal_places=2)
     payments_this_month = serializers.DecimalField(max_digits=14, decimal_places=2)
-

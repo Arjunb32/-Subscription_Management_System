@@ -1,139 +1,157 @@
 """
-Unit tests for billing models.
-
-These tests exercise model-level logic (invoice number generation,
-calculate(), properties) and do NOT require the ``subscriptions`` or
-``products`` apps to be fully wired — they use mocks where needed.
+Tests for billing models: Discount, Invoice, InvoiceLine, Payment.
 """
 
-from datetime import date, timedelta
+import datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, PropertyMock, patch
 
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.test import TestCase
-from django.utils import timezone
 
 from billing.models import Discount, Invoice, InvoiceLine, Payment
+from billing.tests.fixtures.products.models import Product, ProductVariant
+from billing.tests.fixtures.subscriptions.models import Plan, Subscription, SubscriptionLine, TaxRule
+
+User = get_user_model()
 
 
-class DiscountModelTests(TestCase):
-    """Tests for Discount helper properties."""
+class BillingModelTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            email="admin@example.com",
+            password="Password123!",
+            role=User.Role.ADMIN,
+        )
+        self.customer = User.objects.create_user(
+            email="cust1@example.com",
+            password="Password123!",
+            role=User.Role.CUSTOMER,
+        )
+        self.product = Product.objects.create(
+            name="Cloud Storage",
+            sales_price=Decimal("100.00"),
+            cost_price=Decimal("30.00"),
+        )
+        self.tax_rule = TaxRule.objects.create(name="GST 18%", rate=Decimal("18.00"))
+        self.plan = Plan.objects.create(
+            name="Pro Plan",
+            billing_interval="monthly",
+            price=Decimal("100.00"),
+        )
+        self.subscription = Subscription.objects.create(
+            subscription_number="SUB-001",
+            customer=self.customer,
+            plan=self.plan,
+            status="active",
+            start_date=datetime.date(2026, 1, 1),
+            current_period_start=datetime.date(2026, 1, 1),
+            current_period_end=datetime.date(2026, 2, 1),
+        )
 
-    def _make_discount(self, **overrides):
-        defaults = {
-            "name": "Test Discount",
-            "discount_type": Discount.Type.PERCENTAGE,
-            "value": Decimal("10.00"),
-            "start_date": date.today() - timedelta(days=5),
-            "end_date": None,
-            "max_uses": None,
-            "times_used": 0,
-            "applies_to": Discount.Scope.SUBSCRIPTION,
-            "is_active": True,
-        }
-        defaults.update(overrides)
-        # Use a MagicMock to avoid needing a real user / DB
-        discount = Discount(**defaults)
-        return discount
+    def test_discount_validity_rules(self):
+        d = Discount.objects.create(
+            name="Early Bird",
+            discount_type=Discount.Type.PERCENTAGE,
+            value=Decimal("15.00"),
+            start_date=datetime.date(2026, 1, 1),
+            end_date=datetime.date(2026, 1, 31),
+            max_uses=2,
+            times_used=0,
+            applies_to=Discount.Scope.SUBSCRIPTION,
+            created_by=self.admin,
+        )
+        self.assertTrue(d.is_valid_on(datetime.date(2026, 1, 15)))
+        self.assertFalse(d.is_valid_on(datetime.date(2025, 12, 31)))  # Before start
+        self.assertFalse(d.is_valid_on(datetime.date(2026, 2, 1)))   # After end
 
-    def test_is_valid_today_active_no_end(self):
-        d = self._make_discount()
-        self.assertTrue(d.is_valid_today)
+        d.times_used = 2
+        d.save()
+        self.assertFalse(d.is_valid_on(datetime.date(2026, 1, 15)))  # Max uses reached
 
-    def test_is_valid_today_inactive(self):
-        d = self._make_discount(is_active=False)
-        self.assertFalse(d.is_valid_today)
+    def test_invoice_number_generation_and_uniqueness(self):
+        inv1 = Invoice.objects.create(
+            subscription=self.subscription,
+            customer=self.customer,
+            issue_date=datetime.date(2026, 2, 1),
+            due_date=datetime.date(2026, 3, 3),
+            period_start=datetime.date(2026, 1, 1),
+            period_end=datetime.date(2026, 2, 1),
+        )
+        self.assertTrue(inv1.invoice_number.startswith("INV-202602-"))
 
-    def test_is_valid_today_future_start(self):
-        d = self._make_discount(start_date=date.today() + timedelta(days=10))
-        self.assertFalse(d.is_valid_today)
+        inv2 = Invoice.objects.create(
+            subscription=self.subscription,
+            customer=self.customer,
+            issue_date=datetime.date(2026, 2, 1),
+            due_date=datetime.date(2026, 3, 3),
+            period_start=datetime.date(2026, 2, 1),
+            period_end=datetime.date(2026, 3, 1),
+        )
+        self.assertNotEqual(inv1.invoice_number, inv2.invoice_number)
 
-    def test_is_valid_today_past_end(self):
-        d = self._make_discount(end_date=date.today() - timedelta(days=1))
-        self.assertFalse(d.is_valid_today)
+    def test_period_idempotency_constraint(self):
+        Invoice.objects.create(
+            subscription=self.subscription,
+            customer=self.customer,
+            issue_date=datetime.date(2026, 2, 1),
+            due_date=datetime.date(2026, 3, 3),
+            period_start=datetime.date(2026, 1, 1),
+            period_end=datetime.date(2026, 2, 1),
+        )
+        # Creating second invoice with exact same (subscription, period_start, period_end) violates UniqueConstraint
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Invoice.objects.create(
+                    subscription=self.subscription,
+                    customer=self.customer,
+                    issue_date=datetime.date(2026, 2, 1),
+                    due_date=datetime.date(2026, 3, 3),
+                    period_start=datetime.date(2026, 1, 1),
+                    period_end=datetime.date(2026, 2, 1),
+                )
 
-    def test_is_valid_today_uses_exhausted(self):
-        d = self._make_discount(max_uses=5, times_used=5)
-        self.assertFalse(d.is_valid_today)
-
-    def test_is_valid_today_uses_remaining(self):
-        d = self._make_discount(max_uses=5, times_used=3)
-        self.assertTrue(d.is_valid_today)
-
-
-class InvoiceLineCalculateTests(TestCase):
-    """Tests for InvoiceLine.calculate()."""
-
-    def _make_line(self, qty, price, discount=Decimal("0"), tax_rate=Decimal("0")):
+    def test_invoice_line_calculate(self):
+        inv = Invoice.objects.create(
+            subscription=self.subscription,
+            customer=self.customer,
+            issue_date=datetime.date(2026, 2, 1),
+            due_date=datetime.date(2026, 3, 3),
+            period_start=datetime.date(2026, 1, 1),
+            period_end=datetime.date(2026, 2, 1),
+        )
         line = InvoiceLine(
-            quantity=qty,
-            unit_price=price,
-            discount_amount=discount,
+            invoice=inv,
+            product=self.product,
+            description="Cloud Storage",
+            quantity=Decimal("3.00"),
+            unit_price=Decimal("100.00"),
+            tax_rule=self.tax_rule,
+            discount_amount=Decimal("30.00"),
         )
-        if tax_rate:
-            mock_rule = MagicMock()
-            mock_rule.rate = tax_rate
-            line.tax_rule = mock_rule
-            line.tax_rule_id = 1  # truthy so the branch is taken
-        else:
-            line.tax_rule = None
-            line.tax_rule_id = None
-        return line
-
-    def test_basic_no_tax_no_discount(self):
-        line = self._make_line(Decimal("2"), Decimal("100"))
+        # Base: 300, Discounted: 270, Tax 18%: 48.60, Total: 318.60
         line.calculate()
-        self.assertEqual(line.tax_amount, Decimal("0.00"))
-        self.assertEqual(line.line_total, Decimal("200.00"))
+        self.assertEqual(line.tax_rate, Decimal("18.00"))
+        self.assertEqual(line.tax_amount, Decimal("48.60"))
+        self.assertEqual(line.line_total, Decimal("318.60"))
 
-    def test_with_tax(self):
-        line = self._make_line(Decimal("1"), Decimal("100"), tax_rate=Decimal("18"))
-        line.calculate()
-        self.assertEqual(line.tax_amount, Decimal("18.00"))
-        self.assertEqual(line.line_total, Decimal("118.00"))
-
-    def test_with_discount_and_tax(self):
-        # 2 × 100 = 200, discount 20 → 180, tax 10% → 18, total 198
-        line = self._make_line(
-            Decimal("2"),
-            Decimal("100"),
-            discount=Decimal("20"),
-            tax_rate=Decimal("10"),
-        )
-        line.calculate()
-        self.assertEqual(line.tax_amount, Decimal("18.00"))
-        self.assertEqual(line.line_total, Decimal("198.00"))
-
-
-class InvoicePropertiesTests(TestCase):
-    """Tests for Invoice computed properties."""
-
-    def test_amount_due(self):
-        inv = Invoice(total=Decimal("500"), amount_paid=Decimal("200"))
-        self.assertEqual(inv.amount_due, Decimal("300.00"))
-
-    def test_amount_due_overpaid(self):
-        inv = Invoice(total=Decimal("100"), amount_paid=Decimal("150"))
-        self.assertEqual(inv.amount_due, Decimal("0.00"))
-
-    def test_is_overdue_true(self):
-        inv = Invoice(
+    def test_invoice_amount_due_and_overdue_flags(self):
+        inv = Invoice.objects.create(
+            subscription=self.subscription,
+            customer=self.customer,
+            issue_date=datetime.date(2026, 1, 1),
+            due_date=datetime.date(2026, 1, 15),
+            period_start=datetime.date(2026, 1, 1),
+            period_end=datetime.date(2026, 2, 1),
+            total=Decimal("200.00"),
+            amount_paid=Decimal("50.00"),
             status=Invoice.Status.CONFIRMED,
-            due_date=date.today() - timedelta(days=1),
         )
+        self.assertEqual(inv.amount_due, Decimal("150.00"))
         self.assertTrue(inv.is_overdue)
 
-    def test_is_overdue_false_paid(self):
-        inv = Invoice(
-            status=Invoice.Status.PAID,
-            due_date=date.today() - timedelta(days=1),
-        )
+        # Once fully settled, not overdue
+        inv.amount_paid = Decimal("200.00")
+        inv.status = Invoice.Status.PAID
         self.assertFalse(inv.is_overdue)
-
-    def test_is_overdue_false_future(self):
-        inv = Invoice(
-            status=Invoice.Status.CONFIRMED,
-            due_date=date.today() + timedelta(days=5),
-        )
-        self.assertFalse(inv.is_overdue)
-
+        self.assertEqual(inv.amount_due, Decimal("0.00"))

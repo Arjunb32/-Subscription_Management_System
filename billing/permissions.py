@@ -1,66 +1,57 @@
 """
-Custom DRF permissions for the billing app.
+Application-role permissions for the billing app.
 
-Roles expected (set up by the auth owner):
-    - Admin   → is_staff=True, is_superuser=True  (or a custom 'admin' group)
-    - Staff   → is_staff=True
-    - Customer → is_staff=False (regular authenticated user)
+Integrates directly with accounts.models.User.Role ('admin', 'staff', 'customer')
+and accounts.permissions helpers. Application roles are independent of Django's
+internal is_staff/is_superuser flags.
 """
 
 from rest_framework.permissions import BasePermission
+from accounts.models import User
+from accounts.permissions import (
+    IsApplicationAdmin,
+    CustomerOwnershipPermission,
+    CustomerScopedQuerysetMixin,
+    scope_customer_queryset,
+    owned_object_or_404,
+    customer_for_write,
+)
 
 
-class IsAdminUser(BasePermission):
-    """Only superusers / admins."""
+class IsApplicationStaffOrAdmin(BasePermission):
+    """
+    Allows access to application staff or application admin users.
+    Checks user.role in ('staff', 'admin') and user.is_active.
+    """
 
     def has_permission(self, request, view):
+        user = request.user
         return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.is_superuser
+            user
+            and user.is_authenticated
+            and user.is_active
+            and user.role in (User.Role.STAFF, User.Role.ADMIN)
         )
 
 
-class IsStaffOrAdmin(BasePermission):
-    """Staff members and admins."""
-
-    def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.is_staff
-        )
-
-
-class IsOwnerCustomer(BasePermission):
+class IsInvoiceCustomerOrStaff(BasePermission):
     """
-    Object-level: the invoice/payment belongs to the requesting customer.
-
-    Works on objects that have a ``customer`` or ``invoice.customer`` FK.
-    """
-
-    def has_object_permission(self, request, view, obj):
-        customer = getattr(obj, "customer", None)
-        if customer is None:
-            # Payment → follow the invoice FK
-            customer = getattr(getattr(obj, "invoice", None), "customer", None)
-        return customer == request.user
-
-
-class IsStaffOrOwner(BasePermission):
-    """
-    List-level: authenticated.
-    Object-level: staff sees everything; customers see only their own.
+    Object-level permission for invoices and payments:
+    Staff and Admin can access any record.
+    Customer can only access records where invoice.customer == request.user.
     """
 
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated)
+        user = request.user
+        return bool(user and user.is_authenticated and user.is_active)
 
     def has_object_permission(self, request, view, obj):
-        if request.user.is_staff:
+        user = request.user
+        if not user or not user.is_authenticated or not user.is_active:
+            return False
+        if user.role in (User.Role.STAFF, User.Role.ADMIN):
             return True
         customer = getattr(obj, "customer", None)
-        if customer is None:
-            customer = getattr(getattr(obj, "invoice", None), "customer", None)
-        return customer == request.user
-
+        if customer is None and hasattr(obj, "invoice"):
+            customer = obj.invoice.customer
+        return customer == user

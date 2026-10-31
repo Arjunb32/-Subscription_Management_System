@@ -7,11 +7,10 @@ Cross-app dependencies (string-referenced ForeignKeys):
     - subscriptions.TaxRule
     - products.Product
     - products.ProductVariant
-
-If your teammate uses different app labels, update the FK strings below.
 """
 
 from decimal import Decimal
+import datetime
 
 from django.conf import settings
 from django.db import models
@@ -25,11 +24,11 @@ from django.utils import timezone
 
 class Discount(models.Model):
     """
-    A discount rule created by an Admin.
+    A discount rule created by an Application Admin.
 
-    Can be a fixed amount or percentage off, scoped to specific products
-    or applied to an entire subscription.  Start/end dates and a usage
-    cap control when and how many times it can be applied.
+    Can be fixed amount or percentage, scoped to specific products or
+    a whole subscription. Start/end dates, minimum spend/seat thresholds,
+    and a usage limit control application.
     """
 
     class Type(models.TextChoices):
@@ -45,28 +44,28 @@ class Discount(models.Model):
     value = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        help_text="Amount (fixed) or rate (percentage, e.g. 15.00 = 15%).",
+        help_text="Amount (fixed) or percentage (e.g. 15.00 = 15%).",
     )
 
-    # Eligibility thresholds
+    # Thresholds
     min_purchase = models.DecimalField(
         max_digits=12,
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="Minimum invoice subtotal for the discount to apply.",
+        help_text="Minimum invoice subtotal required.",
     )
     min_quantity = models.PositiveIntegerField(
         null=True,
         blank=True,
-        help_text="Minimum total quantity across eligible lines.",
+        help_text="Minimum total quantity required across eligible lines.",
     )
 
     # Validity window
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
 
-    # Usage cap
+    # Usage limits
     max_uses = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -80,7 +79,7 @@ class Discount(models.Model):
         "products.Product",
         blank=True,
         related_name="discounts",
-        help_text="Relevant only when applies_to = 'product'.",
+        help_text="Applicable products when applies_to = 'product'.",
     )
 
     is_active = models.BooleanField(default=True)
@@ -88,6 +87,7 @@ class Discount(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
+        blank=True,
         related_name="created_discounts",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -99,24 +99,21 @@ class Discount(models.Model):
     def __str__(self):
         return f"{self.name} ({self.get_discount_type_display()})"
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    @property
-    def is_valid_today(self):
-        """Return True if the discount is active, within its date window,
-        and hasn't exceeded its usage cap."""
-        today = timezone.now().date()
+    def is_valid_on(self, target_date: datetime.date) -> bool:
+        """Evaluate validity against a specific reference date and current usage."""
         if not self.is_active:
             return False
-        if today < self.start_date:
+        if target_date < self.start_date:
             return False
-        if self.end_date and today > self.end_date:
+        if self.end_date and target_date > self.end_date:
             return False
         if self.max_uses is not None and self.times_used >= self.max_uses:
             return False
         return True
+
+    @property
+    def is_valid_today(self) -> bool:
+        return self.is_valid_on(timezone.now().date())
 
 
 # ---------------------------------------------------------------------------
@@ -126,9 +123,8 @@ class Discount(models.Model):
 
 class Invoice(models.Model):
     """
-    A billing document generated from a Subscription for one billing period.
-
-    Status flow: Draft → Confirmed → Paid  (or Draft/Confirmed → Cancelled).
+    A billing document generated from a Subscription for a single period.
+    Status lifecycle: Draft -> Confirmed -> Paid (or Draft/Confirmed -> Cancelled).
     """
 
     class Status(models.TextChoices):
@@ -153,11 +149,11 @@ class Invoice(models.Model):
     issue_date = models.DateField(default=timezone.now)
     due_date = models.DateField()
 
-    # The subscription period this invoice covers
+    # The billing period this invoice covers
     period_start = models.DateField()
     period_end = models.DateField()
 
-    # Money
+    # Financial snapshots
     subtotal = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal("0.00")
     )
@@ -207,44 +203,40 @@ class Invoice(models.Model):
     def __str__(self):
         return self.invoice_number
 
-    # ------------------------------------------------------------------
-    # Auto-generate invoice number on creation
-    # ------------------------------------------------------------------
-
     def save(self, *args, **kwargs):
         if not self.invoice_number:
-            self.invoice_number = self._generate_invoice_number()
+            self.invoice_number = self._generate_invoice_number(self.issue_date)
         super().save(*args, **kwargs)
 
-    @staticmethod
-    def _generate_invoice_number():
-        """Generate the next sequential invoice number: INV-YYYYMM-XXXX."""
-        today = timezone.now().date()
-        prefix = f"INV-{today.strftime('%Y%m')}-"
+    @classmethod
+    def _generate_invoice_number(cls, issue_date=None) -> str:
+        """Generate sequential invoice number: INV-YYYYMM-XXXX."""
+        ref_date = issue_date or timezone.now().date()
+        prefix = f"INV-{ref_date.strftime('%Y%m')}-"
         last = (
-            Invoice.objects.filter(invoice_number__startswith=prefix)
+            cls.objects.filter(invoice_number__startswith=prefix)
             .order_by("-invoice_number")
             .values_list("invoice_number", flat=True)
             .first()
         )
         if last:
-            seq = int(last.split("-")[-1]) + 1
+            try:
+                seq = int(last.split("-")[-1]) + 1
+            except (ValueError, IndexError):
+                seq = 1
         else:
             seq = 1
         return f"{prefix}{seq:04d}"
 
-    # ------------------------------------------------------------------
-    # Derived properties
-    # ------------------------------------------------------------------
-
     @property
-    def amount_due(self):
+    def amount_due(self) -> Decimal:
         return max(self.total - self.amount_paid, Decimal("0.00"))
 
     @property
-    def is_overdue(self):
+    def is_overdue(self) -> bool:
         return (
-            self.status in (self.Status.DRAFT, self.Status.CONFIRMED)
+            self.status == self.Status.CONFIRMED
+            and self.amount_paid < self.total
             and self.due_date < timezone.now().date()
         )
 
@@ -256,9 +248,8 @@ class Invoice(models.Model):
 
 class InvoiceLine(models.Model):
     """
-    One product/variant line inside an Invoice.
-
-    line_total = (quantity × unit_price) − discount_amount + tax_amount
+    One product/variant line in an invoice.
+    Stores immutable snapshots of prices, quantities, taxes, and discounts.
     """
 
     invoice = models.ForeignKey(
@@ -293,6 +284,10 @@ class InvoiceLine(models.Model):
         blank=True,
         related_name="+",
     )
+    tax_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0.00"),
+        help_text="Snapshot of tax rule percentage at issuance."
+    )
     tax_amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=Decimal("0.00")
     )
@@ -307,20 +302,19 @@ class InvoiceLine(models.Model):
         ordering = ["pk"]
 
     def __str__(self):
-        return f"{self.description} ×{self.quantity}"
+        return f"{self.description} x{self.quantity}"
 
     def calculate(self):
-        """Recompute tax_amount and line_total from the current field values."""
-        base = self.quantity * self.unit_price
-        discounted = base - self.discount_amount
+        """Recompute line total and tax from quantity, unit price, and discount."""
+        base = (self.quantity * self.unit_price).quantize(Decimal("0.01"))
+        discounted = max(base - self.discount_amount, Decimal("0.00"))
 
-        if self.tax_rule_id:
-            # Lazy import not needed – just access the FK object.
-            rate = self.tax_rule.rate if self.tax_rule else Decimal("0")
-        else:
-            rate = Decimal("0")
+        if self.tax_rule and hasattr(self.tax_rule, "rate"):
+            self.tax_rate = Decimal(str(self.tax_rule.rate))
+        elif not self.tax_rate:
+            self.tax_rate = Decimal("0.00")
 
-        self.tax_amount = (discounted * rate / Decimal("100")).quantize(
+        self.tax_amount = (discounted * self.tax_rate / Decimal("100")).quantize(
             Decimal("0.01")
         )
         self.line_total = (discounted + self.tax_amount).quantize(Decimal("0.01"))
@@ -333,10 +327,9 @@ class InvoiceLine(models.Model):
 
 class Payment(models.Model):
     """
-    A payment recorded against an Invoice.
-
-    On save, a signal updates the Invoice's amount_paid and, if the invoice
-    is fully settled, transitions it to 'paid'.
+    A payment recorded against a confirmed Invoice.
+    On save/delete, triggers reconciliation to update invoice.amount_paid
+    and transition status to 'paid' when balance is settled.
     """
 
     class Method(models.TextChoices):
@@ -355,13 +348,14 @@ class Payment(models.Model):
     reference = models.CharField(
         max_length=255,
         blank=True,
-        help_text="Transaction ID, cheque number, etc.",
+        help_text="Transaction ID, check number, bank reference, etc.",
     )
     note = models.TextField(blank=True)
     recorded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
+        blank=True,
         related_name="recorded_payments",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -370,8 +364,4 @@ class Payment(models.Model):
         ordering = ["-payment_date", "-created_at"]
 
     def __str__(self):
-        return (
-            f"Payment {self.amount} on {self.payment_date} "
-            f"→ {self.invoice.invoice_number}"
-        )
-
+        return f"Payment {self.amount} ({self.payment_method}) -> {self.invoice.invoice_number}"
