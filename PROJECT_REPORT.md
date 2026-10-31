@@ -107,9 +107,9 @@ Automated page tests in `dashboard/tests.py` cover anonymous redirects, role bou
 
 ## 9. Commit and remote publication status
 
-The latest remote information was fetched and `feature/dashboard-portal` was fast-forwarded to the verified `origin/main` auth foundation. A subsequent fetch found `origin/feat/billing` at `a13cafd`; that feature branch was inspected but not merged. The initial dashboard implementation commit `1a07ba4` was pushed successfully to `origin/feature/dashboard-portal`. The current billing API integration and staff-role follow-up is being prepared as a subsequent commit. The earlier React prototype and user-edited prototype report remain untracked and unstaged.
+The latest remote information was fetched and `feature/dashboard-portal` was fast-forwarded to the verified `origin/main` auth foundation. A subsequent fetch found `origin/feat/billing` at `a13cafd`; that feature branch was inspected but not merged. Commits `1a07ba4` (Django dashboard/portal pages) and `b316be3` (billing API wiring, staff-role correction, and contract/report updates) are pushed to `origin/feature/dashboard-portal`. The earlier React prototype and user-edited prototype report remain untracked and unstaged.
 
-The final staged-diff review is repeated before each commit; the previous reviewed diff contained no common private-key, API-key, password, or configured Django-secret patterns and passed `git diff --cached --check`. A GitHub CLI (`gh`) was not present in the available command path. No PR has been created; GitHub returned the standard create-PR URL after the successful branch push. No push authentication failure has occurred.
+The final staged-diff review found no common private-key, API-key, password, or configured Django-secret patterns; syntax and whitespace checks passed. A GitHub CLI (`gh`) was not present in the available command path, and the browser automation capture timed out, so a PR could not be created from this session. GitHub's create-PR URL is [Open a pull request](https://github.com/Arjunb32/-Subscription_Management_System/pull/new/feature/dashboard-portal). It should remain a draft while Haridev's subscription API and billing dependencies are integrated. No push authentication failure occurred.
 
 ## 10. Current dashboard and interface (visual summary)
 
