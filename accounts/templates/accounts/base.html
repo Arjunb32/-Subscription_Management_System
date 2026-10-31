@@ -13,6 +13,7 @@
   <header class="site-header">
     <a class="brand" href="{% url 'home' %}"><span class="brand-icon" aria-hidden="true">S</span> Subscription Management</a>
     {% if request.user.is_authenticated %}
+      {% if request.user.role == 'customer' %}<a href="/portal/">My portal</a>{% else %}<a href="/dashboard/">Dashboard</a><a href="/manage/">Manage subscriptions</a>{% endif %}
       <a href="{% url 'account-page' %}">My account</a>
     {% else %}
       <a href="{% url 'login-page' %}">Sign in</a>

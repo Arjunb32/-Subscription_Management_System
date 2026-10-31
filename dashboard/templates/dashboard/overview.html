@@ -1,0 +1,69 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<main class="page-shell" data-feature-page="overview"
+  data-period-from="{{ period_from }}" data-period-to="{{ period_to }}"
+  data-summary-url="/api/billing/dashboard/summary/" data-subscriptions-url="/api/subscriptions/" data-invoices-url="/api/billing/invoices/">
+  <div class="page-heading">
+    <div><p class="eyebrow">ADMIN WORKSPACE</p><h1>Dashboard</h1><p class="subheading">A view of subscription and billing activity.</p></div>
+    <span class="period-chip">Global totals · INR · UTC</span>
+  </div>
+
+  <section id="session-message" class="notice notice-warning" role="status" aria-live="polite" hidden></section>
+  <section id="loading-state" class="loading-state" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>Loading dashboard…</section>
+  <section id="integration-state" class="notice notice-info" role="status" hidden></section>
+  <section id="error-state" class="notice notice-error" role="alert" hidden><span id="error-message"></span><button id="retry-button" class="text-button" type="button">Try again</button></section>
+
+  <section id="dashboard-content" hidden>
+    <div class="metric-grid" aria-label="Billing summary">
+      <article class="metric-card"><div class="metric-label">Active subscriptions <span title="Count with active status">ⓘ</span></div><strong id="metric-active">—</strong><small>Current active subscriptions</small></article>
+      <article class="metric-card"><div class="metric-label">Billed revenue <span title="Confirmed and paid invoice totals; excludes draft and cancelled invoices">ⓘ</span></div><strong id="metric-billed">—</strong><small>Global confirmed and paid invoices</small></article>
+      <article class="metric-card"><div class="metric-label">Payments collected <span title="Recorded payments on invoices that are not cancelled">ⓘ</span></div><strong id="metric-collected">—</strong><small>All recorded payments</small></article>
+      <article class="metric-card"><div class="metric-label">Outstanding balance <span title="Unpaid amount on confirmed invoices">ⓘ</span></div><strong id="metric-outstanding">—</strong><small>Current confirmed invoices</small></article>
+      <article class="metric-card metric-card-alert"><div class="metric-label">Overdue invoices <span title="Confirmed, past-due invoices with a remaining balance">ⓘ</span></div><strong id="metric-overdue">—</strong><small>Due date before today</small></article>
+    </div>
+    <p class="definition-note">Summary totals come from the billing summary API and remain global when table filters change. Customer filters apply to both tables. Invoice status and date filters affect invoices only; subscription status has a separate filter. Table dates use inclusive issue-date-from and due-date-to boundaries in the billing API.</p>
+
+    <section class="panel filter-panel" aria-labelledby="filter-heading">
+      <div class="panel-heading"><div><h2 id="filter-heading">Filter records</h2><p>Date filters use inclusive calendar dates in UTC.</p></div><button id="reset-filters" class="text-button" type="button">Reset</button></div>
+      <form id="dashboard-filters" class="filter-grid">
+        <label>Invoice issue date from<input id="filter-from" name="issue_date_from" type="date" value="{{ period_from }}"></label>
+        <label>Invoice due date through<input id="filter-to" name="due_date_to" type="date"></label>
+        <label>Customer<select id="filter-customer" name="customer"><option value="">All customers</option></select></label>
+        <label>Status<select id="filter-status" name="status"><option value="confirmed" selected>Open invoices</option><option value="">All statuses</option><option value="draft">Draft</option><option value="paid">Paid</option><option value="cancelled">Cancelled</option><option value="overdue">Overdue</option></select></label>
+        <button class="primary-button" type="submit">Apply filters</button>
+      </form>
+      <p class="form-error" id="filter-error" role="alert" hidden></p>
+    </section>
+
+    <section class="panel data-panel" aria-labelledby="subscriptions-heading">
+      <div class="panel-heading subscription-heading">
+        <div><h2 id="subscriptions-heading">Subscriptions</h2><p id="subscriptions-count">—</p></div>
+        <label class="subscription-filter">Subscription status
+          <select id="subscription-status">
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="quotation">Quotation</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+            <option value="closed">Closed</option>
+          </select>
+        </label>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Customer</th><th>Plan</th><th>Status</th><th>Started</th><th>Period ends / billing due</th></tr></thead><tbody id="subscriptions-body"></tbody></table></div>
+      <div id="subscriptions-empty" class="empty-state" hidden>No subscriptions match these filters.</div>
+      <div id="subscriptions-integration" class="notice notice-info" hidden>Subscription service is unavailable.</div>
+      <div class="table-footer"><span id="subscriptions-page-label"></span><div class="pagination"><button id="subscriptions-prev" type="button" aria-label="Previous subscriptions page">Previous</button><button id="subscriptions-next" type="button" aria-label="Next subscriptions page">Next</button></div></div>
+    </section>
+
+    <section class="panel data-panel" aria-labelledby="invoices-heading">
+      <div class="panel-heading"><div><h2 id="invoices-heading">Invoices needing attention</h2><p id="invoices-count">—</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Invoice</th><th>Customer</th><th>Issued</th><th>Due</th><th>Remaining balance</th><th>Status</th></tr></thead><tbody id="invoices-body"></tbody></table></div>
+      <div id="invoices-empty" class="empty-state" hidden>No invoices match these filters.</div>
+      <div class="table-footer"><span id="invoices-page-label"></span><div class="pagination"><button id="invoices-prev" type="button" aria-label="Previous invoices page">Previous</button><button id="invoices-next" type="button" aria-label="Next invoices page">Next</button></div></div>
+    </section>
+    <p id="performance-note" class="performance-note" hidden></p>
+  </section>
+</main>
+{% endblock %}

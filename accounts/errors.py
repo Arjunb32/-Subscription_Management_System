@@ -1,8 +1,12 @@
 from django.http import JsonResponse
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import exception_handler as default_handler
 
 
 def exception_handler(exc, context):
+    if isinstance(exc, DjangoValidationError):
+        exc = ValidationError(getattr(exc, "message_dict", exc.messages))
     return default_handler(exc, context)
 
 
