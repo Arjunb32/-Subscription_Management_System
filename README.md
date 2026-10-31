@@ -13,7 +13,28 @@ served by this same backend; no Node/frontend framework is required.
 
 ## First setup (each teammate, PowerShell)
 
-Install Python 3.11 or newer and PostgreSQL 14 or newer first. Run these commands
+After the authentication PR has been reviewed and merged into `main`, existing
+clones should preserve any current work, then update with:
+
+```powershell
+git fetch origin
+git switch main
+git pull --ff-only origin main
+```
+
+For a new clone, use:
+
+```powershell
+git clone https://github.com/Arjunb32/-Subscription_Management_System.git
+Set-Location -LiteralPath '.\-Subscription_Management_System'
+```
+
+Create your own feature branch for subscriptions, billing/payments, or
+reporting/customer portal before making changes. Each teammate uses their own
+local database credentials and applies the same committed migrations. Do not
+copy another teammate's `.env` or generate replacement authentication migrations.
+
+Use Python 3.11 (the verified runtime) and PostgreSQL 14 or newer. Run these commands
 from this repository's root after obtaining the reviewed changes:
 
 ```powershell
@@ -61,6 +82,12 @@ Then check compatibility **before** applying migrations:
 .\.venv\Scripts\python.exe manage.py check_database
 .\.venv\Scripts\python.exe manage.py showmigrations
 .\.venv\Scripts\python.exe manage.py migrate --plan
+```
+
+Only continue when `check_database` passes and the migration plan is compatible
+with your local schema:
+
+```powershell
 .\.venv\Scripts\python.exe manage.py migrate
 .\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
 .\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
@@ -133,7 +160,8 @@ own test records. Test data is disposable; working data is not.
    password reset and attempt limiting.
 3. Integration: Django authentication pages, JavaScript client and team docs.
 
-Work stays on `feat/auth-roles`. No automatic push or merge is performed.
+Review the foundation on `feat/auth-roles` through a pull request targeting
+`main`. Merge after team review; do not push changes directly to `main`.
 
 ## Authentication handoff
 
@@ -148,6 +176,8 @@ local application admin interactively:
 No credentials are supplied by this repository. Login uses sessions and CSRF;
 role and customer ownership checks run on the server. Console reset emails are
 development output, not actual delivery. Business features are not included.
+Browser interaction checks and live SMTP delivery remain incomplete; production
+readiness has not been established.
 
 ## Optional browser API verification
 

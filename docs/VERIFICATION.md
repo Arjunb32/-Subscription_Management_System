@@ -5,7 +5,9 @@
 - Remote: `https://github.com/Arjunb32/-Subscription_Management_System.git`.
 - Inspected `main` and `feature/authentication`; both were at `7313318` and
   contained only `README.md`. The team then confirmed this is a new project.
-- Work is on local `feat/auth-roles`. No push or merge was performed.
+- The implementation was prepared on local `feat/auth-roles`; no push or merge
+  was performed during that implementation stage. Publication is a separate,
+  explicitly authorized step.
 - Original `HACKATHON_PLAN.md` remains untouched and untracked.
 - Foundation commit: `d396366`; authentication/permissions commit: `1c29333`.
 
@@ -48,7 +50,8 @@
   tested separately from SMTP mode.
 - During verification, manual HTTP accounts contaminated the original unit-test
   database and caused three failures. This was corrected by separating manual
-  verification into `test_auth_http`; the unit suite then passed all 51 tests.
+  verification into `test_auth_http`; the suite passed after that correction,
+  with 52 tests in the final implementation run.
 - Loopback Django verification server started on `127.0.0.1:8001`. An actual
   HTTP request to `/api/auth/me/` returned the expected **403**.
 - `scripts/http_smoke.py`: **16 HTTP checks passed** against the isolated test
@@ -77,3 +80,32 @@
 
 Use the README's exact setup/migration/test commands. Review compatibility with
 any existing schema before applying migrations to a teammate's local database.
+
+## Publication review on 31 October 2026
+
+The results above describe the implementation stage. For the authorized feature
+branch publication, the latest remote refs were fetched and `origin/main` was
+still at `7313318`. The four original outgoing implementation commits were
+reviewed, including their historical file contents. The review found no private
+environment files, configured secret values, concrete reset links, private
+database files or generated artifacts in those commits. Synthetic passwords in
+tests and the test-only settings key are disposable fixtures, not deployed
+credentials.
+
+Checks run again for publication:
+
+- `python -m pip check`: no broken requirements.
+- `manage.py check`: no issues.
+- `manage.py check_database`: connected to the existing working database;
+  consistent history and zero pending migrations. No credential setup or
+  database reset was performed.
+- `manage.py makemigrations --check --dry-run`: no changes detected.
+- `scripts/test_postgres.py run test --keepdb --noinput`: all 52 tests passed in
+  the isolated PostgreSQL test database.
+- `git diff --check`: no whitespace errors.
+
+The publication corrections change only the README handoff instructions and this
+verification record. The untracked project plan and Word report remain excluded.
+The 16 HTTP checks are previously recorded results and were not rerun for this
+publication. Browser interaction checks and live SMTP delivery remain incomplete;
+this foundation is not presented as production-ready.
