@@ -12,7 +12,7 @@
   <header class="site-header">
     <a class="brand" href="{% url 'account-page' %}"><span class="brand-mark" aria-hidden="true">S</span> Subscription Management</a>
     <nav class="site-nav" aria-label="Main navigation">
-      {% if request.user.role == 'admin' %}<a {% if page == 'overview' %}aria-current="page"{% endif %} href="{% url 'dashboard-overview' %}">Dashboard</a>{% endif %}
+      {% if request.user.role == 'admin' or request.user.role == 'staff' %}<a {% if page == 'overview' %}aria-current="page"{% endif %} href="{% url 'dashboard-overview' %}">Dashboard</a>{% endif %}
       {% if request.user.role == 'customer' %}<a {% if page == 'portal' %}aria-current="page"{% endif %} href="{% url 'customer-portal' %}">My portal</a>{% endif %}
       <a href="{% url 'account-page' %}">Account</a>
     </nav>

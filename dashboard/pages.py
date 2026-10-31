@@ -23,8 +23,8 @@ def _page_context(request, page):
 @never_cache
 @login_required(login_url="/login/")
 def overview(request):
-    if not request.user.is_active or request.user.role != User.Role.ADMIN:
-        raise PermissionDenied("The dashboard is available to application admins only.")
+    if not request.user.is_active or request.user.role not in (User.Role.ADMIN, User.Role.STAFF):
+        raise PermissionDenied("The dashboard is available to application staff and admins only.")
     return render(request, "dashboard/overview.html", _page_context(request, "overview"))
 
 

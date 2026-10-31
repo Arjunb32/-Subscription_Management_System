@@ -121,7 +121,8 @@ if (root) {
     hide('error-state'); hide('integration-state'); hide(isPortal ? 'portal-content' : 'dashboard-content', true); hide('loading-state', false);
     try {
       const user = await currentUser();
-      if (user.role !== (isPortal ? 'customer' : 'admin')) throw new Error('This account does not have access to this page.');
+      const allowedRole = isPortal ? user.role === 'customer' : ['admin', 'staff'].includes(user.role);
+      if (!allowedRole) throw new Error('This account does not have access to this page.');
       if (isPortal) {
         const [invoices, payments] = await Promise.all([apiRequest(root.dataset.invoicesUrl), apiRequest(root.dataset.paymentsUrl)]);
         renderLivePortal(user, invoices, payments);
@@ -135,7 +136,7 @@ if (root) {
       } else if (demoAllowed) {
         isPortal ? renderDemoPortal() : renderDemoDashboard();
         text('integration-state', 'Billing APIs are not available in this development checkout. Showing labeled sample data instead.'); hide('integration-state', false);
-      } else if (error instanceof ApiError && error.status === 404) {
+      } else if ((error instanceof ApiError && error.status === 404) || error instanceof SyntaxError) {
         hide('loading-state'); text('integration-state', 'Billing APIs are not available. No sample totals or customer records are being shown.'); hide('integration-state', false);
       } else {
         showError(error);

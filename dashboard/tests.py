@@ -26,7 +26,7 @@ class DashboardPageTests(TestCase):
         self.assertEqual(self.client.get(reverse("customer-portal")).status_code, 200)
         self.assertEqual(self.client.get(reverse("dashboard-overview")).status_code, 403)
         self.client.force_login(self.staff)
-        self.assertEqual(self.client.get(reverse("dashboard-overview")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("dashboard-overview")).status_code, 200)
         self.assertEqual(self.client.get(reverse("customer-portal")).status_code, 403)
 
     @override_settings(DEBUG=True)

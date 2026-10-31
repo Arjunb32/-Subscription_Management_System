@@ -45,7 +45,7 @@ The merged shared foundation used by these pages includes `accounts/static/accou
 
 | Screen | Actual route | Server-side access | Current content |
 |---|---|---|---|
-| Admin dashboard | `GET /dashboard/` | Authenticated application admin only | Metric cards, date/customer/status controls, subscription and invoice tables, pagination, loading/error/empty/session states. In DEBUG, data is clearly labeled as demo fixtures. |
+| Staff dashboard | `GET /dashboard/` | Authenticated application staff or admin | Metric cards, date/customer/status controls, subscription and invoice tables, pagination, loading/error/empty/session states. In DEBUG, fallback data is clearly labeled as demo fixtures. |
 | Customer portal | `GET /portal/` | Authenticated customer role only | Subscription, invoice, and payment tabs. DEBUG examples clearly state that they are generic and not linked to the signed-in customer's account. |
 
 `origin/main` contains the shared authentication API only. The fetched `origin/feat/billing` branch defines these billing endpoints, and the dashboard now calls them through the shared `apiRequest` helper when available:
@@ -75,7 +75,7 @@ The dashboard summary API has no filters, so cards remain global as table filter
 
 ## 6. Customer portal permissions and actions
 
-The portal route requires a signed-in user with the `customer` application role. The dashboard route requires the `admin` role. Other roles receive HTTP 403. Billing's fetched branch uses customer-scoped querysets for `/my/invoices/` and `/my/payments/` before returning those records. Its tests include customer A/B invoice and payment isolation cases, but those tests have not been run in this checkout and the branch is not integrated into `main`.
+The portal route requires a signed-in user with the `customer` application role. The dashboard route requires the `staff` or `admin` role to match the billing summary/list APIs. Other roles receive HTTP 403. Billing's fetched branch uses customer-scoped querysets for `/my/invoices/` and `/my/payments/` before returning those records. Its tests include customer A/B invoice and payment isolation cases, but those tests have not been run in this checkout and the branch is not integrated into `main`.
 
 The customer portal now calls the documented `/api/billing/my/...` endpoints, which are designed to scope records server-side; it never sends a customer ID for the server to trust. The current DEBUG examples remain generic, not tied to the session user, and must never be mistaken for verified isolation. No cancel, change-plan, or payment actions are exposed until Haridev confirms permitted workflows and corresponding server-side authorization. A customer-scoped subscription API has not been found.
 
@@ -107,9 +107,9 @@ Automated page tests in `dashboard/tests.py` cover anonymous redirects, role bou
 
 ## 9. Commit and remote publication status
 
-The latest remote information was fetched and `feature/dashboard-portal` was fast-forwarded to the verified `origin/main` auth foundation. A subsequent fetch found `origin/feat/billing` at `a13cafd`; that feature branch was inspected but not merged. The dashboard implementation and report are staged on this feature branch; the earlier React prototype and user-edited prototype report remain untracked and unstaged. The last scan found no common private-key, API-key, password, or configured Django-secret patterns in the staged diff, and `git diff --cached --check` passed before the latest API wiring edits (rerun before commit).
+The latest remote information was fetched and `feature/dashboard-portal` was fast-forwarded to the verified `origin/main` auth foundation. A subsequent fetch found `origin/feat/billing` at `a13cafd`; that feature branch was inspected but not merged. The initial dashboard implementation commit `1a07ba4` was pushed successfully to `origin/feature/dashboard-portal`. The current billing API integration and staff-role follow-up is being prepared as a subsequent commit. The earlier React prototype and user-edited prototype report remain untracked and unstaged.
 
-No commit or push has been made yet. Git initially rejected the commit because no author identity was configured; SreeHari has now provided `sreeh9472@gmail.com`, so the commit can be retried with that identity. A GitHub CLI (`gh`) was not present in the available command path. No push attempt has been made and no PR has been created, so there is no authentication failure to report at this stage.
+The final staged-diff review is repeated before each commit; the previous reviewed diff contained no common private-key, API-key, password, or configured Django-secret patterns and passed `git diff --cached --check`. A GitHub CLI (`gh`) was not present in the available command path. No PR has been created; GitHub returned the standard create-PR URL after the successful branch push. No push authentication failure has occurred.
 
 ## 10. Current dashboard and interface (visual summary)
 
