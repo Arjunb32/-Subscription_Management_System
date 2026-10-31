@@ -12,3 +12,7 @@ htmlcov/
 staticfiles/
 *.log
 node_modules/
+dist/
+**/dist/
+.DS_Store
+Thumbs.db
