@@ -37,7 +37,20 @@
     </section>
 
     <section class="panel data-panel" aria-labelledby="subscriptions-heading">
-      <div class="panel-heading"><div><h2 id="subscriptions-heading">Subscriptions</h2><p id="subscriptions-count">—</p></div></div>
+      <div class="panel-heading subscription-heading">
+        <div><h2 id="subscriptions-heading">Subscriptions</h2><p id="subscriptions-count">—</p></div>
+        <label class="subscription-filter">Subscription status
+          <select id="subscription-status">
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="quotation">Quotation</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+            <option value="closed">Closed</option>
+          </select>
+        </label>
+      </div>
       <div class="table-wrap"><table><thead><tr><th>Customer</th><th>Plan</th><th>Status</th><th>Started</th><th>Period ends / billing due</th></tr></thead><tbody id="subscriptions-body"></tbody></table></div>
       <div id="subscriptions-empty" class="empty-state" hidden>No subscriptions match these filters.</div>
       <div id="subscriptions-integration" class="notice notice-info" hidden>Subscription service is unavailable.</div>

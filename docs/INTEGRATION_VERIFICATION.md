@@ -1,5 +1,23 @@
 # Integrated verification - 31 October 2026
 
+## Follow-up: dashboard stuck loading
+
+An actual browser run found `dashboard.js` failing while binding the missing
+`subscription-status` select. Added the status filter to the overview template
+with responsive styling. Updated the frontend harness to obtain element IDs from
+the shipped templates and return null for missing controls; it previously created
+any requested element, masking this mismatch. The stricter check reproduced the
+same exception before the template fix and passed afterward, including initial
+load, status filtering, reset, pagination and existing customer action checks.
+
+Restarted the isolated port-8004 demo to discard cached templates. Verified in
+the signed-in browser that loading ends and the live dashboard shows 2 active
+subscriptions, INR 5,822.40 billed, INR 2,440.80 collected and INR 3,381.60
+outstanding. Selecting paused shows zero subscriptions without changing global
+totals; Reset restores both subscriptions. This verifies the dashboard loading
+fix and those interactions only; the original full desktop/mobile QA and external
+service limitations below remain. The follow-up changes are local until published.
+
 ## Actual final checks
 
 | Check | Result |
